@@ -34,6 +34,7 @@ import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.util.BottomSheetUtil;
 import org.thoughtcrime.securesms.util.LongClickMovementMethod;
 import org.thoughtcrime.securesms.util.ThemeUtil;
+import org.thoughtcrime.securesms.util.WindowUtil;
 
 public final class GroupJoinBottomSheetDialogFragment extends BottomSheetDialogFragment {
 
@@ -131,13 +132,19 @@ public final class GroupJoinBottomSheetDialogFragment extends BottomSheetDialogF
     viewModel.getJoinSuccess().observe(getViewLifecycleOwner(), joinGroupSuccess -> {
         Log.i(TAG, "Group joined, navigating to group");
 
-        Intent intent = ConversationIntents.createBuilder(requireContext(), joinGroupSuccess.getGroupRecipient().getId(), joinGroupSuccess.getGroupThreadId())
+        Intent intent = ConversationIntents.createBuilderSync(requireContext(), joinGroupSuccess.getGroupRecipient().getId(), joinGroupSuccess.getGroupThreadId())
                                            .build();
         requireActivity().startActivity(intent);
 
         dismiss();
       }
     );
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    WindowUtil.initializeScreenshotSecurity(requireContext(), requireDialog().getWindow());
   }
 
   private void updateGroupDescription(@NonNull String name, @NonNull String description) {

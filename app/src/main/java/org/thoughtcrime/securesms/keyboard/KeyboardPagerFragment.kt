@@ -1,6 +1,5 @@
 package org.thoughtcrime.securesms.keyboard
 
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +7,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import org.thoughtcrime.securesms.R
+import org.thoughtcrime.securesms.components.InputAwareConstraintLayout
 import org.thoughtcrime.securesms.components.emoji.MediaKeyboard
 import org.thoughtcrime.securesms.keyboard.emoji.EmojiKeyboardPageFragment
 import org.thoughtcrime.securesms.keyboard.gif.GifKeyboardPageFragment
@@ -21,7 +21,7 @@ import org.thoughtcrime.securesms.util.fragments.findListener
 import org.thoughtcrime.securesms.util.visible
 import kotlin.reflect.KClass
 
-class KeyboardPagerFragment : Fragment() {
+class KeyboardPagerFragment : Fragment(), InputAwareConstraintLayout.InputFragment {
 
   private lateinit var emojiButton: View
   private lateinit var stickerButton: View
@@ -57,10 +57,6 @@ class KeyboardPagerFragment : Fragment() {
   }
 
   override fun onHiddenChanged(hidden: Boolean) {
-    if (Build.VERSION.SDK_INT < 21) {
-      return
-    }
-
     if (hidden) {
       WindowUtil.setNavigationBarColor(requireActivity(), ThemeUtil.getThemedColor(requireContext(), android.R.attr.navigationBarColor))
     } else {
@@ -118,7 +114,8 @@ class KeyboardPagerFragment : Fragment() {
     transaction.commitAllowingStateLoss()
   }
 
-  fun show() {
+  override fun show() {
+    findListener<MediaKeyboard.MediaKeyboardListener>()?.onShown()
     if (isAdded && view != null) {
       onHiddenChanged(false)
 
@@ -126,7 +123,8 @@ class KeyboardPagerFragment : Fragment() {
     }
   }
 
-  fun hide() {
+  override fun hide() {
+    findListener<MediaKeyboard.MediaKeyboardListener>()?.onHidden()
     if (isAdded && view != null) {
       onHiddenChanged(true)
 

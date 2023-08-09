@@ -2,9 +2,10 @@ package org.thoughtcrime.securesms.contacts.paged
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Transformations
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.map
+import androidx.lifecycle.switchMap
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.kotlin.plusAssign
@@ -13,9 +14,11 @@ import org.signal.paging.LivePagedData
 import org.signal.paging.PagedData
 import org.signal.paging.PagingConfig
 import org.signal.paging.PagingController
+import org.thoughtcrime.securesms.conversationlist.chatfilter.ConversationFilterRequest
 import org.thoughtcrime.securesms.database.model.DistributionListPrivacyMode
 import org.thoughtcrime.securesms.groups.SelectionLimits
 import org.thoughtcrime.securesms.recipients.Recipient
+import org.thoughtcrime.securesms.search.SearchRepository
 import org.thoughtcrime.securesms.util.livedata.Store
 import org.whispersystems.signalservice.api.util.Preconditions
 
@@ -26,8 +29,12 @@ class ContactSearchViewModel(
   private val selectionLimits: SelectionLimits,
   private val contactSearchRepository: ContactSearchRepository,
   private val performSafetyNumberChecks: Boolean,
-  private val safetyNumberRepository: SafetyNumberRepository = SafetyNumberRepository(),
+  private val arbitraryRepository: ArbitraryRepository?,
+  private val searchRepository: SearchRepository,
+  private val contactSearchPagedDataSourceRepository: ContactSearchPagedDataSourceRepository
 ) : ViewModel() {
+
+  private val safetyNumberRepository: SafetyNumberRepository by lazy { SafetyNumberRepository() }
 
   private val disposables = CompositeDisposable()
 
@@ -42,8 +49,8 @@ class ContactSearchViewModel(
   private val selectionStore = Store<Set<ContactSearchKey>>(emptySet())
   private val errorEvents = PublishSubject.create<ContactSearchError>()
 
-  val controller: LiveData<PagingController<ContactSearchKey>> = Transformations.map(pagedData) { it.controller }
-  val data: LiveData<List<ContactSearchData>> = Transformations.switchMap(pagedData) { it.data }
+  val controller: LiveData<PagingController<ContactSearchKey>> = pagedData.map { it.controller }
+  val data: LiveData<List<ContactSearchData>> = pagedData.switchMap { it.data }
   val configurationState: LiveData<ContactSearchState> = configurationStore.stateLiveData
   val selectionState: LiveData<Set<ContactSearchKey>> = selectionStore.stateLiveData
   val errorEventsStream: Observable<ContactSearchError> = errorEvents
@@ -53,12 +60,21 @@ class ContactSearchViewModel(
   }
 
   fun setConfiguration(contactSearchConfiguration: ContactSearchConfiguration) {
-    val pagedDataSource = ContactSearchPagedDataSource(contactSearchConfiguration)
+    val pagedDataSource = ContactSearchPagedDataSource(
+      contactSearchConfiguration,
+      arbitraryRepository = arbitraryRepository,
+      searchRepository = searchRepository,
+      contactSearchPagedDataSourceRepository = contactSearchPagedDataSourceRepository
+    )
     pagedData.value = PagedData.createForLiveData(pagedDataSource, pagingConfig)
   }
 
   fun setQuery(query: String?) {
     configurationStore.update { it.copy(query = query) }
+  }
+
+  fun setConversationFilterRequest(conversationFilterRequest: ConversationFilterRequest) {
+    configurationStore.update { it.copy(conversationFilterRequest = conversationFilterRequest) }
   }
 
   fun expandSection(sectionKey: ContactSearchConfiguration.SectionKey) {
@@ -98,7 +114,11 @@ class ContactSearchViewModel(
     return selectionStore.state
   }
 
-  fun addToVisibleGroupStories(groupStories: Set<ContactSearchKey.RecipientSearchKey.Story>) {
+  fun clearSelection() {
+    selectionStore.update { emptySet() }
+  }
+
+  fun addToVisibleGroupStories(groupStories: Set<ContactSearchKey.RecipientSearchKey>) {
     disposables += contactSearchRepository.markDisplayAsStory(groupStories.map { it.recipientId }).subscribe {
       configurationStore.update { state ->
         state.copy(
@@ -139,10 +159,22 @@ class ContactSearchViewModel(
   class Factory(
     private val selectionLimits: SelectionLimits,
     private val repository: ContactSearchRepository,
-    private val performSafetyNumberChecks: Boolean
+    private val performSafetyNumberChecks: Boolean,
+    private val arbitraryRepository: ArbitraryRepository?,
+    private val searchRepository: SearchRepository,
+    private val contactSearchPagedDataSourceRepository: ContactSearchPagedDataSourceRepository
   ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-      return modelClass.cast(ContactSearchViewModel(selectionLimits, repository, performSafetyNumberChecks)) as T
+      return modelClass.cast(
+        ContactSearchViewModel(
+          selectionLimits = selectionLimits,
+          contactSearchRepository = repository,
+          performSafetyNumberChecks = performSafetyNumberChecks,
+          arbitraryRepository = arbitraryRepository,
+          searchRepository = searchRepository,
+          contactSearchPagedDataSourceRepository = contactSearchPagedDataSourceRepository
+        )
+      ) as T
     }
   }
 }

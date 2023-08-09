@@ -2,7 +2,7 @@ package org.thoughtcrime.securesms.testing
 
 import com.google.protobuf.ByteString
 import org.signal.libsignal.zkgroup.groups.GroupMasterKey
-import org.whispersystems.signalservice.api.push.ServiceId
+import org.whispersystems.signalservice.api.push.ServiceId.ACI
 import org.whispersystems.signalservice.internal.push.SignalServiceProtos
 import org.whispersystems.signalservice.internal.push.SignalServiceProtos.DataMessage
 import org.whispersystems.signalservice.internal.push.SignalServiceProtos.GroupContextV2
@@ -17,11 +17,11 @@ class TestProtos private constructor() {
     uuid: UUID = UUID.randomUUID()
   ): AddressProto.Builder {
     return AddressProto.newBuilder()
-      .setUuid(ServiceId.from(uuid).toByteString())
+      .setUuid(ACI.from(uuid).toByteString())
   }
 
   fun metadata(
-    address: AddressProto = address().build(),
+    address: AddressProto = address().build()
   ): MetadataProto.Builder {
     return MetadataProto.newBuilder()
       .setAddress(address)
@@ -41,7 +41,7 @@ class TestProtos private constructor() {
     authorUuid: String = UUID.randomUUID().toString()
   ): DataMessage.StoryContext.Builder {
     return DataMessage.StoryContext.newBuilder()
-      .setAuthorUuid(authorUuid)
+      .setAuthorAci(authorUuid)
       .setSentTimestamp(sentTimestamp)
   }
 

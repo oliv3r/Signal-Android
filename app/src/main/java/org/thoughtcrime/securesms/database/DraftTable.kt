@@ -139,8 +139,9 @@ class DraftTable(context: Context?, databaseHelper: SignalDatabase?) : DatabaseT
       const val AUDIO = "audio"
       const val LOCATION = "location"
       const val QUOTE = "quote"
-      const val MENTION = "mention"
+      const val BODY_RANGES = "mention"
       const val VOICE_NOTE = "voice_note"
+      const val MESSAGE_EDIT = "message_edit"
     }
   }
 
@@ -157,6 +158,10 @@ class DraftTable(context: Context?, databaseHelper: SignalDatabase?) : DatabaseT
 
     fun getDraftOfType(type: String): Draft? {
       return firstOrNull { it.type == type }
+    }
+
+    fun shouldUpdateSnippet(): Boolean {
+      return none { it.type == Draft.MESSAGE_EDIT }
     }
 
     fun getSnippet(context: Context): String {

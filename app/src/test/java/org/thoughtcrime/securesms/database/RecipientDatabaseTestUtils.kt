@@ -2,10 +2,12 @@ package org.thoughtcrime.securesms.database
 
 import android.net.Uri
 import org.signal.core.util.Bitmask
+import org.signal.core.util.toOptional
 import org.signal.libsignal.zkgroup.profiles.ExpiringProfileKeyCredential
 import org.thoughtcrime.securesms.badges.models.Badge
 import org.thoughtcrime.securesms.conversation.colors.AvatarColor
 import org.thoughtcrime.securesms.conversation.colors.ChatColors
+import org.thoughtcrime.securesms.database.model.GroupRecord
 import org.thoughtcrime.securesms.database.model.ProfileAvatarFileDetails
 import org.thoughtcrime.securesms.database.model.RecipientRecord
 import org.thoughtcrime.securesms.groups.GroupId
@@ -14,7 +16,7 @@ import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.recipients.RecipientDetails
 import org.thoughtcrime.securesms.recipients.RecipientId
 import org.thoughtcrime.securesms.wallpaper.ChatWallpaper
-import org.whispersystems.signalservice.api.push.ServiceId
+import org.whispersystems.signalservice.api.push.ServiceId.ACI
 import java.util.Optional
 import java.util.UUID
 import kotlin.random.Random
@@ -32,19 +34,18 @@ object RecipientDatabaseTestUtils {
     isSelf: Boolean = false,
     participants: List<RecipientId> = listOf(),
     recipientId: RecipientId = RecipientId.from(Random.nextLong()),
-    serviceId: ServiceId? = ServiceId.from(UUID.randomUUID()),
+    serviceId: ACI? = ACI.from(UUID.randomUUID()),
     username: String? = null,
     e164: String? = null,
     email: String? = null,
     groupId: GroupId? = null,
-    groupType: RecipientTable.GroupType = RecipientTable.GroupType.NONE,
+    groupType: RecipientTable.RecipientType = RecipientTable.RecipientType.INDIVIDUAL,
     blocked: Boolean = false,
     muteUntil: Long = -1,
     messageVibrateState: RecipientTable.VibrateState = RecipientTable.VibrateState.DEFAULT,
     callVibrateState: RecipientTable.VibrateState = RecipientTable.VibrateState.DEFAULT,
     messageRingtone: Uri = Uri.EMPTY,
     callRingtone: Uri = Uri.EMPTY,
-    defaultSubscriptionId: Int = 0,
     expireMessages: Int = 0,
     registered: RecipientTable.RegisteredState = RecipientTable.RegisteredState.REGISTERED,
     profileKey: ByteArray = Random.nextBytes(32),
@@ -61,9 +62,7 @@ object RecipientDatabaseTestUtils {
     lastProfileFetch: Long = 0L,
     notificationChannel: String? = null,
     unidentifiedAccessMode: RecipientTable.UnidentifiedAccessMode = RecipientTable.UnidentifiedAccessMode.UNKNOWN,
-    forceSmsSelection: Boolean = false,
     capabilities: Long = 0L,
-    insightBannerTier: RecipientTable.InsightsBannerTier = RecipientTable.InsightsBannerTier.NO_TIER,
     storageId: ByteArray? = null,
     mentionSetting: RecipientTable.MentionSetting = RecipientTable.MentionSetting.ALWAYS_NOTIFY,
     wallpaper: ChatWallpaper? = null,
@@ -78,12 +77,15 @@ object RecipientDatabaseTestUtils {
       IdentityTable.VerifiedStatus.DEFAULT,
       false,
       false,
-      0
+      0,
+      null
     ),
     extras: Recipient.Extras? = null,
     hasGroupsInCommon: Boolean = false,
     badges: List<Badge> = emptyList(),
-    isReleaseChannel: Boolean = false
+    isReleaseChannel: Boolean = false,
+    isActive: Boolean = true,
+    groupRecord: GroupRecord? = null
   ): Recipient = Recipient(
     recipientId,
     RecipientDetails(
@@ -109,7 +111,6 @@ object RecipientDatabaseTestUtils {
         callVibrateState,
         messageRingtone,
         callRingtone,
-        defaultSubscriptionId,
         expireMessages,
         registered,
         profileKey,
@@ -126,7 +127,6 @@ object RecipientDatabaseTestUtils {
         lastProfileFetch,
         notificationChannel,
         unidentifiedAccessMode,
-        forceSmsSelection,
         RecipientRecord.Capabilities(
           capabilities,
           Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.GROUPS_V1_MIGRATION, RecipientTable.Capabilities.BIT_LENGTH).toInt()),
@@ -136,9 +136,8 @@ object RecipientDatabaseTestUtils {
           Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.STORIES, RecipientTable.Capabilities.BIT_LENGTH).toInt()),
           Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.GIFT_BADGES, RecipientTable.Capabilities.BIT_LENGTH).toInt()),
           Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.PNP, RecipientTable.Capabilities.BIT_LENGTH).toInt()),
-          Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.PAYMENT_ACTIVATION, RecipientTable.Capabilities.BIT_LENGTH).toInt()),
+          Recipient.Capability.deserialize(Bitmask.read(capabilities, RecipientTable.Capabilities.PAYMENT_ACTIVATION, RecipientTable.Capabilities.BIT_LENGTH).toInt())
         ),
-        insightBannerTier,
         storageId,
         mentionSetting,
         wallpaper,
@@ -151,10 +150,14 @@ object RecipientDatabaseTestUtils {
         hasGroupsInCommon,
         badges,
         needsPniSignature = false,
-        isHidden = false
+        isHidden = false,
+        null
       ),
       participants,
-      isReleaseChannel
+      isReleaseChannel,
+      isActive,
+      null,
+      groupRecord.toOptional()
     ),
     resolved
   )

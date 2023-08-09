@@ -33,7 +33,6 @@ object ReleaseChannel {
     messageRanges: BodyRangeList? = null,
     storyType: StoryType = StoryType.NONE
   ): MessageTable.InsertResult? {
-
     val attachments: Optional<List<SignalServiceAttachment>> = if (media != null) {
       val attachment = SignalServiceAttachmentPointer(
         CDN_NUMBER,
@@ -44,6 +43,7 @@ object ReleaseChannel {
         Optional.empty(),
         mediaWidth,
         mediaHeight,
+        Optional.empty(),
         Optional.empty(),
         Optional.of(media),
         false,

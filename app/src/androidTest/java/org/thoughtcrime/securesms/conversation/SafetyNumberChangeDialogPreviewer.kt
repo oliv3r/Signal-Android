@@ -7,6 +7,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.thoughtcrime.securesms.contacts.paged.ContactSearchKey
+import org.thoughtcrime.securesms.conversation.v2.ConversationActivity
 import org.thoughtcrime.securesms.database.IdentityTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.database.model.DistributionListId
@@ -64,7 +65,7 @@ class SafetyNumberChangeDialogPreviewer {
       SafetyNumberBottomSheet
         .forIdentityRecordsAndDestinations(
           identityRecords = ApplicationDependencies.getProtocolStore().aci().identities().getIdentityRecords(othersRecipients).identityRecords,
-          destinations = listOf(ContactSearchKey.RecipientSearchKey.Story(myStoryRecipientId))
+          destinations = listOf(ContactSearchKey.RecipientSearchKey(myStoryRecipientId, true))
         )
         .show(conversationActivity.supportFragmentManager)
     }

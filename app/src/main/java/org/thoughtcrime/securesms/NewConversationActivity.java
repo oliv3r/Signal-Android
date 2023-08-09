@@ -20,6 +20,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -35,36 +36,34 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.signal.core.util.DimensionUnit;
+import org.signal.core.util.concurrent.LifecycleDisposable;
 import org.signal.core.util.concurrent.SimpleTask;
 import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.components.menu.ActionItem;
 import org.thoughtcrime.securesms.components.menu.SignalContextMenu;
-import org.thoughtcrime.securesms.contacts.ContactSelectionListItem;
 import org.thoughtcrime.securesms.contacts.management.ContactsManagementRepository;
 import org.thoughtcrime.securesms.contacts.management.ContactsManagementViewModel;
+import org.thoughtcrime.securesms.contacts.paged.ContactSearchKey;
 import org.thoughtcrime.securesms.contacts.sync.ContactDiscovery;
 import org.thoughtcrime.securesms.conversation.ConversationIntents;
-import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.groups.ui.creategroup.CreateGroupActivity;
-import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.util.CommunicationActions;
 import org.thoughtcrime.securesms.util.FeatureFlags;
-import org.thoughtcrime.securesms.util.LifecycleDisposable;
-import org.thoughtcrime.securesms.util.Util;
 import org.thoughtcrime.securesms.util.views.SimpleProgressDialog;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import io.reactivex.rxjava3.disposables.Disposable;
 
 /**
  * Activity container for starting a new conversation.
@@ -72,7 +71,7 @@ import java.util.stream.Stream;
  * @author Moxie Marlinspike
  */
 public class NewConversationActivity extends ContactSelectionActivity
-    implements ContactSelectionListFragment.ListCallback, ContactSelectionListFragment.OnItemLongClickListener
+    implements ContactSelectionListFragment.NewConversationCallback, ContactSelectionListFragment.OnItemLongClickListener
 {
 
   @SuppressWarnings("unused")
@@ -96,7 +95,7 @@ public class NewConversationActivity extends ContactSelectionActivity
     ContactsManagementViewModel.Factory factory    = new ContactsManagementViewModel.Factory(repository);
 
     contactLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), activityResult -> {
-      if (activityResult.getResultCode() == RESULT_OK) {
+      if (activityResult.getResultCode() != RESULT_CANCELED) {
         handleManualRefresh();
       }
     });
@@ -105,7 +104,7 @@ public class NewConversationActivity extends ContactSelectionActivity
   }
 
   @Override
-  public void onBeforeContactSelected(@NonNull Optional<RecipientId> recipientId, String number, @NonNull Consumer<Boolean> callback) {
+  public void onBeforeContactSelected(boolean isFromUnknownSearchKey, @NonNull Optional<RecipientId> recipientId, String number, @NonNull Consumer<Boolean> callback) {
     boolean smsSupported = SignalStore.misc().getSmsExportPhase().allowSmsFeatures();
 
     if (recipientId.isPresent()) {
@@ -124,7 +123,7 @@ public class NewConversationActivity extends ContactSelectionActivity
           if (!resolved.isRegistered() || !resolved.hasServiceId()) {
             Log.i(TAG, "[onContactSelected] Not registered or no UUID. Doing a directory refresh.");
             try {
-              ContactDiscovery.refresh(this, resolved, false);
+              ContactDiscovery.refresh(this, resolved, false, TimeUnit.SECONDS.toMillis(10));
               resolved = Recipient.resolved(resolved.getId());
             } catch (IOException e) {
               Log.w(TAG, "[onContactSelected] Failed to refresh directory for new contact.");
@@ -165,37 +164,41 @@ public class NewConversationActivity extends ContactSelectionActivity
   }
 
   private void launch(Recipient recipient) {
-    long   existingThread = SignalDatabase.threads().getThreadIdIfExistsFor(recipient.getId());
-    Intent intent         = ConversationIntents.createBuilder(this, recipient.getId(), existingThread)
-                                               .withDraftText(getIntent().getStringExtra(Intent.EXTRA_TEXT))
-                                               .withDataUri(getIntent().getData())
-                                               .withDataType(getIntent().getType())
-                                               .build();
+    Disposable disposable = ConversationIntents.createBuilder(this, recipient.getId(), -1L)
+                                               .map(builder -> builder
+                                                   .withDraftText(getIntent().getStringExtra(Intent.EXTRA_TEXT))
+                                                   .withDataUri(getIntent().getData())
+                                                   .withDataType(getIntent().getType())
+                                                   .build())
+                                               .subscribe(intent -> {
+                                                 startActivity(intent);
+                                                 finish();
+                                               });
 
-    startActivity(intent);
-    finish();
+    disposables.add(disposable);
   }
 
   @Override
   public boolean onOptionsItemSelected(MenuItem item) {
     super.onOptionsItemSelected(item);
 
-    switch (item.getItemId()) {
-      case android.R.id.home:
-        super.onBackPressed();
-        return true;
-      case R.id.menu_refresh:
-        handleManualRefresh();
-        return true;
-      case R.id.menu_new_group:
-        handleCreateGroup();
-        return true;
-      case R.id.menu_invite:
-        handleInvite();
-        return true;
-    }
+    int itemId = item.getItemId();
 
-    return false;
+    if (itemId == android.R.id.home) {
+      super.onBackPressed();
+      return true;
+    } else if (itemId == R.id.menu_refresh) {
+      handleManualRefresh();
+      return true;
+    } else if (itemId == R.id.menu_new_group) {
+      handleCreateGroup();
+      return true;
+    } else if (itemId == R.id.menu_invite) {
+      handleInvite();
+      return true;
+    } else {
+      return false;
+    }
   }
 
   private void handleManualRefresh() {
@@ -233,18 +236,14 @@ public class NewConversationActivity extends ContactSelectionActivity
   }
 
   @Override
-  public boolean onLongClick(ContactSelectionListItem contactSelectionListItem, RecyclerView recyclerView) {
-    RecipientId recipientId = contactSelectionListItem.getRecipientId().orElse(null);
-    if (recipientId == null) {
-      return false;
-    }
-
-    List<ActionItem> actions = generateContextualActionsForRecipient(recipientId);
+  public boolean onLongClick(View anchorView, ContactSearchKey contactSearchKey, RecyclerView recyclerView) {
+    RecipientId      recipientId = contactSearchKey.requireRecipientSearchKey().getRecipientId();
+    List<ActionItem> actions     = generateContextualActionsForRecipient(recipientId);
     if (actions.isEmpty()) {
       return false;
     }
 
-    new SignalContextMenu.Builder(contactSelectionListItem, (ViewGroup) contactSelectionListItem.getRootView())
+    new SignalContextMenu.Builder(anchorView, (ViewGroup) anchorView.getRootView())
         .preferredVerticalPosition(SignalContextMenu.VerticalPosition.BELOW)
         .preferredHorizontalPosition(SignalContextMenu.HorizontalPosition.START)
         .offsetX((int) DimensionUnit.DP.toPixels(12))
@@ -274,7 +273,12 @@ public class NewConversationActivity extends ContactSelectionActivity
         R.drawable.ic_chat_message_24,
         getString(R.string.NewConversationActivity__message),
         R.color.signal_colorOnSurface,
-        () -> startActivity(ConversationIntents.createBuilder(this, recipient.getId(), -1L).build())
+        () -> {
+          Disposable disposable = ConversationIntents.createBuilder(this, recipient.getId(), -1L)
+                                                     .subscribe(builder -> startActivity(builder.build()));
+
+          disposables.add(disposable);
+        }
     );
   }
 
@@ -367,6 +371,7 @@ public class NewConversationActivity extends ContactSelectionActivity
         .setPositiveButton(R.string.NewConversationActivity__remove,
                            (dialog, which) -> {
                              disposables.add(viewModel.hideContact(recipient).subscribe(() -> {
+                               onRefresh();
                                displaySnackbar(R.string.NewConversationActivity__s_has_been_removed, recipient.getDisplayName(this));
                              }));
                            }
@@ -375,7 +380,7 @@ public class NewConversationActivity extends ContactSelectionActivity
         .show();
   }
 
-  private void displaySnackbar(@StringRes int message, Object ... formatArgs) {
+  private void displaySnackbar(@StringRes int message, Object... formatArgs) {
     Snackbar.make(findViewById(android.R.id.content), getString(message, formatArgs), Snackbar.LENGTH_SHORT).show();
   }
 }

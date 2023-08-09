@@ -13,6 +13,8 @@ import com.annimon.stream.Stream;
 
 import org.signal.core.util.ThreadUtil;
 import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.conversation.colors.AvatarColor;
+import org.thoughtcrime.securesms.database.CallLinkTable;
 import org.thoughtcrime.securesms.database.DistributionListTables;
 import org.thoughtcrime.securesms.database.GroupTable;
 import org.thoughtcrime.securesms.database.model.GroupRecord;
@@ -30,6 +32,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
 
 public final class LiveRecipient {
 
@@ -41,15 +44,17 @@ public final class LiveRecipient {
   private final LiveData<Recipient>           observableLiveDataResolved;
   private final Set<RecipientForeverObserver> observers;
   private final Observer<Recipient>           foreverObserver;
-  private final AtomicReference<Recipient> recipient;
-  private final RecipientTable             recipientTable;
-  private final GroupTable                 groupDatabase;
-  private final DistributionListTables distributionListTables;
-  private final MutableLiveData<Object> refreshForceNotify;
+  private final AtomicReference<Recipient>    recipient;
+  private final RecipientTable                recipientTable;
+  private final GroupTable                    groupDatabase;
+  private final DistributionListTables        distributionListTables;
+  private final MutableLiveData<Object>       refreshForceNotify;
+  private final BehaviorSubject<Recipient>    subject;
 
   LiveRecipient(@NonNull Context context, @NonNull Recipient defaultRecipient) {
     this.context                  = context.getApplicationContext();
     this.liveData                 = new MutableLiveData<>(defaultRecipient);
+    this.subject                  = BehaviorSubject.createDefault(defaultRecipient);
     this.recipient                = new AtomicReference<>(defaultRecipient);
     this.recipientTable           = SignalDatabase.recipients();
     this.groupDatabase            = SignalDatabase.groups();
@@ -81,6 +86,13 @@ public final class LiveRecipient {
   }
 
   /**
+   * @return An rx-flavored {@link Observable}.
+   */
+  public @NonNull Observable<Recipient> observable() {
+    return subject;
+  }
+
+  /**
    * Watch the recipient for changes. The callback will only be invoked if the provided lifecycle is
    * in a valid state. No need to remove the observer. If you do wish to remove the observer (if,
    * for instance, you wish to remove the listener before the end of the owner's lifecycle), you can
@@ -95,19 +107,6 @@ public final class LiveRecipient {
    */
   public void removeObservers(@NonNull LifecycleOwner owner) {
     ThreadUtil.runOnMain(() -> observableLiveData.removeObservers(owner));
-  }
-
-  public Observable<Recipient> asObservable() {
-    return Observable.create(emitter -> {
-      Recipient current = recipient.get();
-      if (current != null && current.getId() != RecipientId.UNKNOWN) {
-        emitter.onNext(current);
-      }
-
-      RecipientForeverObserver foreverObserver = emitter::onNext;
-      observeForever(foreverObserver);
-      emitter.setCancellable(() -> removeForeverObserver(foreverObserver));
-    });
   }
 
   /**
@@ -197,7 +196,9 @@ public final class LiveRecipient {
       details = getGroupRecipientDetails(record);
     } else if (record.getDistributionListId() != null) {
       details = getDistributionListRecipientDetails(record);
-    } else {
+    } else if (record.getCallLinkRoomId() != null) {
+      details = getCallLinkRecipientDetails(record);
+    }else {
       details = RecipientDetails.forIndividual(context, record);
     }
 
@@ -219,10 +220,10 @@ public final class LiveRecipient {
         avatarId = Optional.of(groupRecord.get().getAvatarId());
       }
 
-      return new RecipientDetails(title, null,  avatarId, false, false, record.getRegistered(), record, members, false);
+      return new RecipientDetails(title, null,  avatarId, false, false, record.getRegistered(), record, members, false, groupRecord.get().isActive(), null, groupRecord);
     }
 
-    return new RecipientDetails(null, null, Optional.empty(), false, false, record.getRegistered(), record, null, false);
+    return new RecipientDetails(null, null, Optional.empty(), false, false, record.getRegistered(), record, null, false, false, null, Optional.empty());
   }
 
   @WorkerThread
@@ -240,9 +241,23 @@ public final class LiveRecipient {
     return RecipientDetails.forDistributionList(null, null, record);
   }
 
+  @WorkerThread
+  private @NonNull RecipientDetails getCallLinkRecipientDetails(@NonNull RecipientRecord record) {
+    CallLinkTable.CallLink callLink = SignalDatabase.callLinks().getCallLinkByRoomId(Objects.requireNonNull(record.getCallLinkRoomId()));
+
+    if (callLink != null) {
+      String name = callLink.getState().getName();
+
+      return RecipientDetails.forCallLink(name, record, callLink.getAvatarColor());
+    }
+
+    return RecipientDetails.forCallLink(null, record, AvatarColor.UNKNOWN);
+  }
+
   synchronized void set(@NonNull Recipient recipient) {
     this.recipient.set(recipient);
     this.liveData.postValue(recipient);
+    this.subject.onNext(recipient);
   }
 
   @Override

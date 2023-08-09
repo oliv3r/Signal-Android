@@ -3,6 +3,7 @@ package org.thoughtcrime.securesms.stories
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import android.text.SpannableString
 import android.util.AttributeSet
 import android.view.View
 import android.widget.ImageView
@@ -13,14 +14,17 @@ import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.components.ClippedCardView
+import org.thoughtcrime.securesms.conversation.MessageStyler
 import org.thoughtcrime.securesms.conversation.colors.ChatColors
+import org.thoughtcrime.securesms.database.model.databaseprotos.BodyRangeList
 import org.thoughtcrime.securesms.database.model.databaseprotos.StoryTextPost
 import org.thoughtcrime.securesms.fonts.TextFont
 import org.thoughtcrime.securesms.linkpreview.LinkPreview
-import org.thoughtcrime.securesms.linkpreview.LinkPreviewViewModel
+import org.thoughtcrime.securesms.linkpreview.LinkPreviewState
 import org.thoughtcrime.securesms.mediasend.v2.text.TextStoryPostCreationState
 import org.thoughtcrime.securesms.mediasend.v2.text.TextStoryScale
 import org.thoughtcrime.securesms.mediasend.v2.text.TextStoryTextWatcher
+import org.thoughtcrime.securesms.util.LongClickMovementMethod
 import org.thoughtcrime.securesms.util.concurrent.ListenableFuture
 import org.thoughtcrime.securesms.util.visible
 import java.util.Locale
@@ -44,6 +48,7 @@ class StoryTextPostView @JvmOverloads constructor(
 
   init {
     TextStoryTextWatcher.install(textView)
+    disableCreationMode()
   }
 
   fun getLinkPreviewThumbnailWidth(useLargeThumbnail: Boolean): Int {
@@ -54,12 +59,14 @@ class StoryTextPostView @JvmOverloads constructor(
     return linkPreviewView.getThumbnailViewHeight(useLargeThumbnail)
   }
 
-  fun showCloseButton() {
+  fun enableCreationMode() {
     linkPreviewView.setCanClose(true)
+    textView.movementMethod = null
   }
 
-  fun hideCloseButton() {
+  fun disableCreationMode() {
     linkPreviewView.setCanClose(false)
+    textView.movementMethod = LongClickMovementMethod.getInstance(context)
   }
 
   fun setTypeface(typeface: Typeface) {
@@ -119,23 +126,27 @@ class StoryTextPostView @JvmOverloads constructor(
     postAdjustLinkPreviewTranslationY()
   }
 
-  fun bindFromStoryTextPost(storyTextPost: StoryTextPost) {
+  fun bindFromStoryTextPost(id: Long, storyTextPost: StoryTextPost, bodyRanges: BodyRangeList?) {
     visible = true
     linkPreviewView.visible = false
 
-    val font = TextFont.fromStyle(storyTextPost.style)
+    val font: TextFont = TextFont.fromStyle(storyTextPost.style)
     setPostBackground(ChatColors.forChatColor(ChatColors.Id.NotSet, storyTextPost.background).chatBubbleMask)
 
     if (font.isAllCaps) {
       setText(storyTextPost.body.uppercase(Locale.getDefault()), false)
     } else {
-      setText(storyTextPost.body, false)
+      val body = SpannableString(storyTextPost.body)
+      if (font == TextFont.REGULAR && bodyRanges != null) {
+        MessageStyler.style(id, bodyRanges, body)
+      }
+      setText(body, false)
     }
 
     setTextColor(storyTextPost.textForegroundColor, false)
     setTextBackgroundColor(storyTextPost.textBackgroundColor)
 
-    hideCloseButton()
+    disableCreationMode()
 
     postAdjustLinkPreviewTranslationY()
   }
@@ -148,7 +159,7 @@ class StoryTextPostView @JvmOverloads constructor(
     linkPreviewView.setThumbnailDrawable(drawable, useLargeThumbnail)
   }
 
-  fun bindLinkPreviewState(linkPreviewState: LinkPreviewViewModel.LinkPreviewState, hiddenVisibility: Int, useLargeThumbnail: Boolean) {
+  fun bindLinkPreviewState(linkPreviewState: LinkPreviewState, hiddenVisibility: Int, useLargeThumbnail: Boolean) {
     linkPreviewView.bind(linkPreviewState, hiddenVisibility, useLargeThumbnail)
   }
 

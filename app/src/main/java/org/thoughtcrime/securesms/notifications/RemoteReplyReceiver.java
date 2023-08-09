@@ -76,7 +76,6 @@ public class RemoteReplyReceiver extends BroadcastReceiver {
         long threadId;
 
         Recipient     recipient      = Recipient.resolved(recipientId);
-        int           subscriptionId = recipient.getDefaultSubscriptionId().orElse(-1);
         long          expiresIn      = TimeUnit.SECONDS.toMillis(recipient.getExpiresInSeconds());
         ParentStoryId parentStoryId  = groupStoryId != Long.MIN_VALUE ? ParentStoryId.deserialize(groupStoryId) : null;
 
@@ -86,7 +85,6 @@ public class RemoteReplyReceiver extends BroadcastReceiver {
                                                         responseText.toString(),
                                                         new LinkedList<>(),
                                                         System.currentTimeMillis(),
-                                                        subscriptionId,
                                                         expiresIn,
                                                         false,
                                                         0,
@@ -100,18 +98,16 @@ public class RemoteReplyReceiver extends BroadcastReceiver {
                                                         Collections.emptySet(),
                                                         Collections.emptySet(),
                                                         null,
-                                                        recipient.isPushGroup());
+                                                        recipient.isPushGroup(),
+                                                        null,
+                                                        -1,
+                                                        0);
             threadId = MessageSender.send(context, reply, -1, MessageSender.SendType.SIGNAL, null, null);
             break;
           }
           case SecureMessage: {
-            OutgoingMessage reply = OutgoingMessage.text(recipient, responseText.toString(), expiresIn, System.currentTimeMillis());
+            OutgoingMessage reply = OutgoingMessage.text(recipient, responseText.toString(), expiresIn, System.currentTimeMillis(), null);
             threadId = MessageSender.send(context, reply, -1, MessageSender.SendType.SIGNAL, null, null);
-            break;
-          }
-          case UnsecuredSmsMessage: {
-            OutgoingMessage reply = OutgoingMessage.sms(recipient, responseText.toString(), subscriptionId);
-            threadId = MessageSender.send(context, reply, -1, MessageSender.SendType.SMS, null, null);
             break;
           }
           default:

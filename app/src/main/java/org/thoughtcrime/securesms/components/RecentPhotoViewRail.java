@@ -125,6 +125,7 @@ public class RecentPhotoViewRail extends FrameLayout implements LoaderManager.Lo
               .signature(signature)
               .diskCacheStrategy(DiskCacheStrategy.NONE)
               .transition(DrawableTransitionOptions.withCrossFade())
+              .centerCrop()
               .into(viewHolder.imageView);
 
       viewHolder.imageView.setOnClickListener(v -> {
@@ -133,14 +134,12 @@ public class RecentPhotoViewRail extends FrameLayout implements LoaderManager.Lo
 
     }
 
-    @TargetApi(16)
     @SuppressWarnings("SuspiciousNameCombination")
     private String getWidthColumn(int orientation) {
       if (orientation == 0 || orientation == 180) return MediaStore.Images.ImageColumns.WIDTH;
       else                                        return MediaStore.Images.ImageColumns.HEIGHT;
     }
 
-    @TargetApi(16)
     @SuppressWarnings("SuspiciousNameCombination")
     private String getHeightColumn(int orientation) {
       if (orientation == 0 || orientation == 180) return MediaStore.Images.ImageColumns.HEIGHT;

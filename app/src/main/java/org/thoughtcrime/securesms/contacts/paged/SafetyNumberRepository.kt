@@ -50,12 +50,12 @@ class SafetyNumberRepository(
 
     if (recipients.isNotEmpty()) {
       Log.i(TAG, "Checking on ${recipients.size} identities...")
-      val requests: List<Single<List<IdentityCheckResponse.AciIdentityPair>>> = recipients.chunked(batchSize) { it.createBatchRequestSingle() }
+      val requests: List<Single<List<IdentityCheckResponse.ServiceIdentityPair>>> = recipients.chunked(batchSize) { it.createBatchRequestSingle() }
       stopwatch.split("requests")
 
-      val aciKeyPairs: List<IdentityCheckResponse.AciIdentityPair> = Single.zip(requests) { responses ->
+      val aciKeyPairs: List<IdentityCheckResponse.ServiceIdentityPair> = Single.zip(requests) { responses ->
         responses
-          .map { it as List<IdentityCheckResponse.AciIdentityPair> }
+          .map { it as List<IdentityCheckResponse.ServiceIdentityPair> }
           .flatten()
       }.safeBlockingGet()
 
@@ -65,8 +65,8 @@ class SafetyNumberRepository(
         Log.d(TAG, "No identity key mismatches")
       } else {
         aciKeyPairs
-          .filter { it.aci != null && it.identityKey != null }
-          .forEach { IdentityUtil.saveIdentity(it.aci.toString(), it.identityKey) }
+          .filter { it.serviceId != null && it.identityKey != null }
+          .forEach { IdentityUtil.saveIdentity(it.serviceId.toString(), it.identityKey) }
       }
       recentlyFetched += recipients.associate { it.id to now }
       stopwatch.split("saving-identities")
@@ -77,8 +77,8 @@ class SafetyNumberRepository(
   private fun List<ContactSearchKey>.flattenToRecipientIds(): Set<RecipientId> {
     return this
       .map {
-        when (it) {
-          is ContactSearchKey.RecipientSearchKey.KnownRecipient -> {
+        when {
+          it is ContactSearchKey.RecipientSearchKey && !it.isStory -> {
             val recipient = Recipient.resolved(it.recipientId)
             if (recipient.isGroup) {
               recipient.participantIds
@@ -86,7 +86,7 @@ class SafetyNumberRepository(
               listOf(it.recipientId)
             }
           }
-          is ContactSearchKey.RecipientSearchKey.Story -> Recipient.resolved(it.recipientId).participantIds
+          it is ContactSearchKey.RecipientSearchKey -> Recipient.resolved(it.recipientId).participantIds
           else -> throw AssertionError("Invalid contact selection $it")
         }
       }
@@ -95,7 +95,7 @@ class SafetyNumberRepository(
       .apply { remove(Recipient.self().id) }
   }
 
-  private fun List<Recipient>.createBatchRequestSingle(): Single<List<IdentityCheckResponse.AciIdentityPair>> {
+  private fun List<Recipient>.createBatchRequestSingle(): Single<List<IdentityCheckResponse.ServiceIdentityPair>> {
     return profileService
       .performIdentityCheck(
         mapNotNull { r ->
@@ -107,7 +107,7 @@ class SafetyNumberRepository(
           }
         }.associate { it }
       )
-      .map { ServiceResponseProcessor.DefaultProcessor(it).resultOrThrow.aciKeyPairs ?: emptyList() }
+      .map { ServiceResponseProcessor.DefaultProcessor(it).resultOrThrow.serviceIdKeyPairs ?: emptyList() }
       .onErrorReturn { t ->
         Log.w(TAG, "Unable to fetch identities", t)
         emptyList()

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import org.signal.libsignal.protocol.IdentityKey;
 import org.whispersystems.signalservice.api.push.SignedPreKeyEntity;
+import org.whispersystems.signalservice.internal.push.KyberPreKeyEntity;
 import org.whispersystems.signalservice.internal.push.OutgoingPushMessage;
 import org.whispersystems.signalservice.internal.util.JsonUtil;
 
@@ -14,10 +15,13 @@ import java.util.Map;
 
 public final class ChangePhoneNumberRequest {
   @JsonProperty
-  private String number;
+  private String sessionId;
 
   @JsonProperty
-  private String code;
+  private String recoveryPassword;
+
+  @JsonProperty
+  private String number;
 
   @JsonProperty("reglock")
   private String registrationLock;
@@ -33,34 +37,38 @@ public final class ChangePhoneNumberRequest {
   @JsonProperty
   private Map<String, SignedPreKeyEntity> devicePniSignedPrekeys;
 
+  @JsonProperty("devicePniPqLastResortPrekeys")
+  private Map<String, KyberPreKeyEntity> devicePniLastResortKyberPrekeys;
+
   @JsonProperty
   private Map<String, Integer> pniRegistrationIds;
 
+  @SuppressWarnings("unused") 
   public ChangePhoneNumberRequest() {}
 
-  public ChangePhoneNumberRequest(String number,
-                                  String code,
+  public ChangePhoneNumberRequest(String sessionId,
+                                  String recoveryPassword,
+                                  String number,
                                   String registrationLock,
                                   IdentityKey pniIdentityKey,
                                   List<OutgoingPushMessage> deviceMessages,
                                   Map<String, SignedPreKeyEntity> devicePniSignedPrekeys,
+                                  Map<String, KyberPreKeyEntity> devicePniLastResortKyberPrekeys,
                                   Map<String, Integer> pniRegistrationIds)
   {
-    this.number                 = number;
-    this.code                   = code;
-    this.registrationLock       = registrationLock;
-    this.pniIdentityKey         = pniIdentityKey;
-    this.deviceMessages         = deviceMessages;
-    this.devicePniSignedPrekeys = devicePniSignedPrekeys;
-    this.pniRegistrationIds     = pniRegistrationIds;
+    this.sessionId                       = sessionId;
+    this.recoveryPassword                = recoveryPassword;
+    this.number                          = number;
+    this.registrationLock                = registrationLock;
+    this.pniIdentityKey                  = pniIdentityKey;
+    this.deviceMessages                  = deviceMessages;
+    this.devicePniSignedPrekeys          = devicePniSignedPrekeys;
+    this.devicePniLastResortKyberPrekeys = devicePniLastResortKyberPrekeys;
+    this.pniRegistrationIds              = pniRegistrationIds;
   }
 
   public String getNumber() {
     return number;
-  }
-
-  public String getCode() {
-    return code;
   }
 
   public String getRegistrationLock() {

@@ -6,6 +6,8 @@ import org.signal.core.util.Conversions;
 import org.signal.core.util.StreamUtil;
 import org.signal.libsignal.protocol.kdf.HKDF;
 import org.signal.libsignal.protocol.util.ByteUtil;
+import org.thoughtcrime.securesms.backup.proto.BackupFrame;
+import org.thoughtcrime.securesms.backup.proto.Header;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +27,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 class BackupRecordInputStream extends FullBackupBase.BackupStream {
 
+  private final int         version;
   private final InputStream in;
   private final Cipher      cipher;
   private final Mac         mac;
@@ -45,21 +48,30 @@ class BackupRecordInputStream extends FullBackupBase.BackupStream {
       byte[] headerFrame  = new byte[headerLength];
       StreamUtil.readFully(in, headerFrame);
 
-      BackupProtos.BackupFrame frame = BackupProtos.BackupFrame.parseFrom(headerFrame);
+      BackupFrame frame = BackupFrame.ADAPTER.decode(headerFrame);
 
-      if (!frame.hasHeader()) {
+      if (frame.header_ == null) {
         throw new IOException("Backup stream does not start with header!");
       }
 
-      BackupProtos.Header header = frame.getHeader();
+      Header header = frame.header_;
 
-      this.iv = header.getIv().toByteArray();
+      if (header.iv == null) {
+        throw new IOException("Missing IV!");
+      }
+
+      this.iv = header.iv.toByteArray();
 
       if (iv.length != 16) {
         throw new IOException("Invalid IV length!");
       }
 
-      byte[]   key     = getBackupKey(passphrase, header.hasSalt() ? header.getSalt().toByteArray() : null);
+      this.version = header.version != null ? header.version : 0;
+      if (!BackupVersions.isCompatible(version)) {
+        throw new IOException("Invalid backup version: " + version);
+      }
+
+      byte[]   key     = getBackupKey(passphrase, header.salt != null ? header.salt.toByteArray() : null);
       byte[]   derived = HKDF.deriveSecrets(key, "Backup Export".getBytes(), 64);
       byte[][] split   = ByteUtil.split(derived, 32, 32);
 
@@ -76,7 +88,7 @@ class BackupRecordInputStream extends FullBackupBase.BackupStream {
     }
   }
 
-  BackupProtos.BackupFrame readFrame() throws IOException {
+  BackupFrame readFrame() throws IOException {
     return readFrame(in);
   }
 
@@ -128,12 +140,28 @@ class BackupRecordInputStream extends FullBackupBase.BackupStream {
     }
   }
 
-  private BackupProtos.BackupFrame readFrame(InputStream in) throws IOException {
+  private BackupFrame readFrame(InputStream in) throws IOException {
     try {
       byte[] length = new byte[4];
       StreamUtil.readFully(in, length);
 
-      byte[] frame = new byte[Conversions.byteArrayToInt(length)];
+      Conversions.intToByteArray(iv, 0, counter++);
+      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(cipherKey, "AES"), new IvParameterSpec(iv));
+
+      int frameLength;
+      if (BackupVersions.isFrameLengthEncrypted(version)) {
+        mac.update(length);
+        // this depends upon cipher being a stream cipher mode in order to get back the length without needing a full AES block-size input
+        byte[] decryptedLength = cipher.update(length);
+        if (decryptedLength.length != length.length) {
+          throw new IOException("Cipher was not a stream cipher!");
+        }
+        frameLength = Conversions.byteArrayToInt(decryptedLength);
+      } else {
+        frameLength = Conversions.byteArrayToInt(length);
+      }
+
+      byte[] frame = new byte[frameLength];
       StreamUtil.readFully(in, frame);
 
       byte[] theirMac = new byte[10];
@@ -146,12 +174,9 @@ class BackupRecordInputStream extends FullBackupBase.BackupStream {
         throw new IOException("Bad MAC");
       }
 
-      Conversions.intToByteArray(iv, 0, counter++);
-      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(cipherKey, "AES"), new IvParameterSpec(iv));
-
       byte[] plaintext = cipher.doFinal(frame, 0, frame.length - 10);
 
-      return BackupProtos.BackupFrame.parseFrom(plaintext);
+      return BackupFrame.ADAPTER.decode(plaintext);
     } catch (InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
       throw new AssertionError(e);
     }

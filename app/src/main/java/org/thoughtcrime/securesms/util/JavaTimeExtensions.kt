@@ -5,11 +5,13 @@ import android.os.Build
 import android.text.format.DateFormat
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.WeekFields
@@ -32,6 +34,28 @@ fun LocalDateTime.toMillis(zoneOffset: ZoneOffset = ZoneId.systemDefault().toOff
 }
 
 /**
+ * Convert [ZonedDateTime] to be same as [System.currentTimeMillis]
+ */
+fun ZonedDateTime.toMillis(): Long {
+  return TimeUnit.SECONDS.toMillis(toEpochSecond())
+}
+
+/**
+ * Convert [LocalDateTime] to a [ZonedDateTime] at the UTC offset
+ */
+fun LocalDateTime.atUTC(): ZonedDateTime {
+  return atZone(ZoneId.ofOffset("UTC", ZoneOffset.UTC))
+}
+
+/**
+ * Create a LocalDateTime with the same year, month, and day, but set
+ * to midnight.
+ */
+fun LocalDateTime.atMidnight(): LocalDateTime {
+  return LocalDateTime.of(year, month, dayOfMonth, 0, 0)
+}
+
+/**
  * Return true if the [LocalDateTime] is within [start] and [end] inclusive.
  */
 fun LocalDateTime.isBetween(start: LocalDateTime, end: LocalDateTime): Boolean {
@@ -43,6 +67,13 @@ fun LocalDateTime.isBetween(start: LocalDateTime, end: LocalDateTime): Boolean {
  */
 fun Long.toLocalDateTime(zoneId: ZoneId = ZoneId.systemDefault()): LocalDateTime {
   return LocalDateTime.ofInstant(Instant.ofEpochMilli(this), zoneId)
+}
+
+/**
+ * Convert milliseconds to local date with provided [zoneId].
+ */
+fun Long.toLocalDate(zoneId: ZoneId = ZoneId.systemDefault()): LocalDate {
+  return Instant.ofEpochMilli(this).atZone(zoneId).toLocalDate()
 }
 
 /**
@@ -82,6 +113,6 @@ fun Locale.orderOfDaysInWeek(): List<DayOfWeek> {
     firstDayOfWeek.plus(3),
     firstDayOfWeek.plus(4),
     firstDayOfWeek.plus(5),
-    firstDayOfWeek.plus(6),
+    firstDayOfWeek.plus(6)
   )
 }

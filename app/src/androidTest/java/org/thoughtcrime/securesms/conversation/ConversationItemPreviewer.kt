@@ -8,6 +8,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.signal.core.util.ThreadUtil
 import org.thoughtcrime.securesms.attachments.PointerAttachment
+import org.thoughtcrime.securesms.conversation.v2.ConversationActivity
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.mms.IncomingMediaMessage
 import org.thoughtcrime.securesms.mms.OutgoingMessage
@@ -69,7 +70,7 @@ class ConversationItemPreviewer {
       sentTimeMillis = System.currentTimeMillis(),
       serverTimeMillis = System.currentTimeMillis(),
       receivedTimeMillis = System.currentTimeMillis(),
-      attachments = PointerAttachment.forPointers(Optional.of(attachments)),
+      attachments = PointerAttachment.forPointers(Optional.of(attachments))
     )
 
     SignalDatabase.messages.insertSecureDecryptedMessageInbox(message, SignalDatabase.threads.getOrCreateThreadIdFor(other)).get()
@@ -88,7 +89,7 @@ class ConversationItemPreviewer {
       sentTimeMillis = System.currentTimeMillis(),
       serverTimeMillis = System.currentTimeMillis(),
       receivedTimeMillis = System.currentTimeMillis(),
-      attachments = PointerAttachment.forPointers(Optional.of(attachments)),
+      attachments = PointerAttachment.forPointers(Optional.of(attachments))
     )
 
     val insert = SignalDatabase.messages.insertSecureDecryptedMessageInbox(message, SignalDatabase.threads.getOrCreateThreadIdFor(other)).get()
@@ -141,6 +142,7 @@ class ConversationItemPreviewer {
       Optional.empty(),
       1024,
       1024,
+      Optional.empty(),
       Optional.empty(),
       Optional.of("/not-there.jpg"),
       false,

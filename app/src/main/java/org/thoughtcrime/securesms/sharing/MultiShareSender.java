@@ -19,6 +19,7 @@ import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.attachments.Attachment;
 import org.thoughtcrime.securesms.attachments.UriAttachment;
 import org.thoughtcrime.securesms.contacts.paged.ContactSearchKey;
+import org.thoughtcrime.securesms.contactshare.Contact;
 import org.thoughtcrime.securesms.conversation.MessageSendType;
 import org.thoughtcrime.securesms.conversation.colors.ChatColors;
 import org.thoughtcrime.securesms.database.AttachmentTable;
@@ -107,10 +108,9 @@ public final class MultiShareSender {
 
       long            threadId       = SignalDatabase.threads().getOrCreateThreadIdFor(recipient);
       List<Mention>   mentions       = getValidMentionsForRecipient(recipient, multiShareArgs.getMentions());
-      MessageSendType sendType       = resolveTransportOption(context, recipient);
-      boolean         forceSms       = recipient.isForceSmsSelection() && sendType.usesSmsTransport();
-      int             subscriptionId = sendType.getSimSubscriptionIdOr(-1);
+      MessageSendType sendType       = MessageSendType.SignalMessageSendType.INSTANCE;
       long            expiresIn      = TimeUnit.SECONDS.toMillis(recipient.getExpiresInSeconds());
+      List<Contact>   contacts       = multiShareArgs.getSharedContacts();
       boolean needsSplit = !sendType.usesSmsTransport() &&
                            message != null &&
                            message.length() > sendType.calculateCharacters(message).maxPrimaryMessageSize;
@@ -122,7 +122,8 @@ public final class MultiShareSender {
       boolean hasPushMedia = hasMmsMedia ||
                              multiShareArgs.getLinkPreview() != null ||
                              !mentions.isEmpty() ||
-                             needsSplit;
+                             needsSplit ||
+                             !contacts.isEmpty();
 
       MultiShareTimestampProvider sentTimestamp      = recipient.isDistributionList() ? distributionListSentTimestamps : MultiShareTimestampProvider.create();
       boolean                     canSendAsTextStory = recipientSearchKey.isStory() && multiShareArgs.isValidForTextStoryGeneration();
@@ -136,21 +137,20 @@ public final class MultiShareSender {
                                               slideDeck,
                                               sendType,
                                               threadId,
-                                              forceSms,
                                               expiresIn,
                                               multiShareArgs.isViewOnce(),
-                                              subscriptionId,
                                               mentions,
                                               recipientSearchKey.isStory(),
                                               sentTimestamp,
                                               canSendAsTextStory,
                                               storiesBatch,
-                                              generatedTextStoryBackgroundColor);
+                                              generatedTextStoryBackgroundColor,
+                                              contacts);
         results.add(new MultiShareSendResult(recipientSearchKey, MultiShareSendResult.Type.SUCCESS));
       } else if (recipientSearchKey.isStory()) {
         results.add(new MultiShareSendResult(recipientSearchKey, MultiShareSendResult.Type.INVALID_SHARE_TO_STORY));
       } else {
-        sendTextMessage(context, multiShareArgs, recipient, threadId, forceSms, expiresIn, subscriptionId);
+        sendTextMessage(context, multiShareArgs, recipient, threadId, expiresIn);
         results.add(new MultiShareSendResult(recipientSearchKey, MultiShareSendResult.Type.SUCCESS));
       }
 
@@ -175,48 +175,24 @@ public final class MultiShareSender {
     return new MultiShareSendResultCollection(results);
   }
 
-  public static @NonNull MessageSendType getWorstTransportOption(@NonNull Context context, @NonNull Set<ContactSearchKey.RecipientSearchKey> recipientSearchKeys) {
-    for (ContactSearchKey.RecipientSearchKey recipientSearchKey : recipientSearchKeys) {
-      MessageSendType type = resolveTransportOption(context, Recipient.resolved(recipientSearchKey.getRecipientId()).isForceSmsSelection() && !recipientSearchKey.isStory());
-      if (type.usesSmsTransport()) {
-        return type;
-      }
-    }
-
-    return MessageSendType.SignalMessageSendType.INSTANCE;
-  }
-
-  private static @NonNull MessageSendType resolveTransportOption(@NonNull Context context, @NonNull Recipient recipient) {
-    return resolveTransportOption(context, !recipient.isDistributionList() && (recipient.isForceSmsSelection() || !recipient.isRegistered()));
-  }
-
-  public static @NonNull MessageSendType resolveTransportOption(@NonNull Context context, boolean forceSms) {
-    if (forceSms) {
-      return MessageSendType.getFirstForTransport(context, false, MessageSendType.TransportType.SMS);
-    } else {
-      return MessageSendType.SignalMessageSendType.INSTANCE;
-    }
-  }
-
   private static void sendMediaMessageOrCollectStoryToBatch(@NonNull Context context,
                                                             @NonNull MultiShareArgs multiShareArgs,
                                                             @NonNull Recipient recipient,
                                                             @NonNull SlideDeck slideDeck,
                                                             @NonNull MessageSendType sendType,
                                                             long threadId,
-                                                            boolean forceSms,
                                                             long expiresIn,
                                                             boolean isViewOnce,
-                                                            int subscriptionId,
                                                             @NonNull List<Mention> validatedMentions,
                                                             boolean isStory,
                                                             @NonNull MultiShareTimestampProvider sentTimestamps,
                                                             boolean canSendAsTextStory,
                                                             @NonNull List<OutgoingMessage> storiesToBatchSend,
-                                                            @NonNull ChatColors generatedTextStoryBackgroundColor)
+                                                            @NonNull ChatColors generatedTextStoryBackgroundColor,
+                                                            @NonNull List<Contact> contacts)
   {
     String body = multiShareArgs.getDraftText();
-    if (sendType.usesSignalTransport() && !forceSms && body != null) {
+    if (sendType.usesSignalTransport() && body != null) {
       MessageUtil.SplitResult splitMessage = MessageUtil.getSplitMessage(context, body, sendType.calculateCharacters(body).maxPrimaryMessageSize);
       body = splitMessage.getBody();
 
@@ -244,13 +220,14 @@ public final class MultiShareSender {
                                                               new SlideDeck(),
                                                               body,
                                                               sentTimestamps.getMillis(0),
-                                                              subscriptionId,
                                                               0L,
                                                               false,
                                                               storyType.toTextStoryType(),
                                                               buildLinkPreviews(context, multiShareArgs.getLinkPreview()),
                                                               Collections.emptyList(),
-                                                              false);
+                                                              false,
+                                                              multiShareArgs.getBodyRanges(),
+                                                              contacts);
 
         outgoingMessages.add(outgoingMessage);
       } else if (canSendAsTextStory) {
@@ -263,6 +240,8 @@ public final class MultiShareSender {
                                                         return expandToClips(context, (VideoSlide) slide).stream();
                                                       } else if (slide instanceof ImageSlide) {
                                                         return java.util.stream.Stream.of(ensureDefaultQuality(context, (ImageSlide) slide));
+                                                      } else if (slide instanceof StickerSlide) {
+                                                        return java.util.stream.Stream.empty();
                                                       } else {
                                                         return java.util.stream.Stream.of(slide);
                                                       }
@@ -280,13 +259,14 @@ public final class MultiShareSender {
                                                                 singletonDeck,
                                                                 body,
                                                                 sentTimestamps.getMillis(i),
-                                                                subscriptionId,
                                                                 0L,
                                                                 false,
                                                                 storyType,
                                                                 Collections.emptyList(),
                                                                 validatedMentions,
-                                                                false);
+                                                                false,
+                                                                multiShareArgs.getBodyRanges(),
+                                                                contacts);
 
           outgoingMessages.add(outgoingMessage);
         }
@@ -296,20 +276,21 @@ public final class MultiShareSender {
                                                             slideDeck,
                                                             body,
                                                             sentTimestamps.getMillis(0),
-                                                            subscriptionId,
                                                             expiresIn,
                                                             isViewOnce,
                                                             StoryType.NONE,
                                                             buildLinkPreviews(context, multiShareArgs.getLinkPreview()),
                                                             validatedMentions,
-                                                            false);
+                                                            false,
+                                                            multiShareArgs.getBodyRanges(),
+                                                            contacts);
 
       outgoingMessages.add(outgoingMessage);
     }
 
     if (isStory) {
       storiesToBatchSend.addAll(outgoingMessages);
-    } else if (shouldSendAsPush(recipient, forceSms)) {
+    } else if (shouldSendAsPush(recipient)) {
       for (final OutgoingMessage outgoingMessage : outgoingMessages) {
         MessageSender.send(context, outgoingMessage.makeSecure(), threadId, SendType.SIGNAL, null, null);
       }
@@ -345,7 +326,9 @@ public final class MultiShareSender {
           linkPreview.getDate(),
           linkPreview.getThumbnail().map(thumbnail ->
                                              thumbnail instanceof UriAttachment ? thumbnail
-                                                                                : new ImageSlide(context,
+                                                                                : thumbnail.getUri() == null
+                                                                                  ? null
+                                                                                  : new ImageSlide(context,
                                                                                                  thumbnail.getUri(),
                                                                                                  thumbnail.getContentType(),
                                                                                                  thumbnail.getSize(),
@@ -384,20 +367,18 @@ public final class MultiShareSender {
                                       @NonNull MultiShareArgs multiShareArgs,
                                       @NonNull Recipient recipient,
                                       long threadId,
-                                      boolean forceSms,
-                                      long expiresIn,
-                                      int subscriptionId)
+                                      long expiresIn)
   {
     String body = multiShareArgs.getDraftText() == null ? "" : multiShareArgs.getDraftText();
 
     OutgoingMessage outgoingMessage;
-    if (shouldSendAsPush(recipient, forceSms)) {
-      outgoingMessage = OutgoingMessage.text(recipient, body, expiresIn, System.currentTimeMillis());
+    if (shouldSendAsPush(recipient)) {
+      outgoingMessage = OutgoingMessage.text(recipient, body, expiresIn, System.currentTimeMillis(), multiShareArgs.getBodyRanges());
     } else {
-      outgoingMessage = OutgoingMessage.sms(recipient, body, subscriptionId);
+      outgoingMessage = OutgoingMessage.sms(recipient, body);
     }
 
-    MessageSender.send(context, outgoingMessage, threadId, forceSms ? SendType.SMS : SendType.SIGNAL, null, null);
+    MessageSender.send(context, outgoingMessage, threadId, SendType.SIGNAL, null, null);
   }
 
   private static @NonNull OutgoingMessage generateTextStory(@NonNull Context context,
@@ -419,7 +400,8 @@ public final class MultiShareSender {
                                         .toByteArray()),
         sentTimestamp,
         storyType.toTextStoryType(),
-        buildLinkPreviews(context, multiShareArgs.getLinkPreview()));
+        buildLinkPreviews(context, multiShareArgs.getLinkPreview()),
+        multiShareArgs.getBodyRanges());
   }
 
   private static @NonNull String getBodyForTextStory(@Nullable String draftText, @Nullable LinkPreview linkPreview) {
@@ -442,10 +424,10 @@ public final class MultiShareSender {
     return trimmed.replace(linkPreview.getUrl(), "").trim();
   }
 
-  private static boolean shouldSendAsPush(@NonNull Recipient recipient, boolean forceSms) {
+  private static boolean shouldSendAsPush(@NonNull Recipient recipient) {
     return recipient.isDistributionList() ||
            recipient.isServiceIdOnly() ||
-           (recipient.isRegistered() && !forceSms);
+           recipient.isRegistered();
   }
 
   private static @NonNull SlideDeck buildSlideDeck(@NonNull Context context, @NonNull MultiShareArgs multiShareArgs) throws SlideNotFoundException {

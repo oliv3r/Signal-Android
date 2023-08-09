@@ -6,6 +6,7 @@ import android.database.Cursor
 import org.signal.core.util.CursorUtil
 import org.signal.core.util.SqlUtil
 import org.signal.core.util.delete
+import org.signal.core.util.update
 import org.thoughtcrime.securesms.database.model.MessageId
 import org.thoughtcrime.securesms.database.model.ReactionRecord
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies
@@ -21,7 +22,6 @@ class ReactionTable(context: Context, databaseHelper: SignalDatabase) : Database
 
     private const val ID = "_id"
     const val MESSAGE_ID = "message_id"
-    const val IS_MMS = "is_mms"
     private const val AUTHOR_ID = "author_id"
     private const val EMOJI = "emoji"
     private const val DATE_SENT = "date_sent"
@@ -31,24 +31,18 @@ class ReactionTable(context: Context, databaseHelper: SignalDatabase) : Database
     val CREATE_TABLE = """
       CREATE TABLE $TABLE_NAME (
         $ID INTEGER PRIMARY KEY,
-        $MESSAGE_ID INTEGER NOT NULL,
-        $IS_MMS INTEGER NOT NULL,
+        $MESSAGE_ID INTEGER NOT NULL REFERENCES ${MessageTable.TABLE_NAME} (${MessageTable.ID}) ON DELETE CASCADE,
         $AUTHOR_ID INTEGER NOT NULL REFERENCES ${RecipientTable.TABLE_NAME} (${RecipientTable.ID}) ON DELETE CASCADE,
         $EMOJI TEXT NOT NULL,
         $DATE_SENT INTEGER NOT NULL,
         $DATE_RECEIVED INTEGER NOT NULL,
-        UNIQUE($MESSAGE_ID, $IS_MMS, $AUTHOR_ID) ON CONFLICT REPLACE
+        UNIQUE($MESSAGE_ID, $AUTHOR_ID) ON CONFLICT REPLACE
       )
-    """.trimIndent()
+    """
 
     @JvmField
-    val CREATE_TRIGGERS = arrayOf(
-      """
-        CREATE TRIGGER reactions_mms_delete AFTER DELETE ON ${MessageTable.TABLE_NAME} 
-        BEGIN 
-        	DELETE FROM $TABLE_NAME WHERE $MESSAGE_ID = old.${MessageTable.ID} AND $IS_MMS = 1;
-        END
-      """
+    val CREATE_INDEXES = arrayOf(
+      "CREATE INDEX IF NOT EXISTS reaction_author_id_index ON $TABLE_NAME ($AUTHOR_ID)"
     )
 
     private fun readReaction(cursor: Cursor): ReactionRecord {
@@ -113,7 +107,6 @@ class ReactionTable(context: Context, databaseHelper: SignalDatabase) : Database
     try {
       val values = ContentValues().apply {
         put(MESSAGE_ID, messageId.id)
-        put(IS_MMS, 0)
         put(EMOJI, reaction.emoji)
         put(AUTHOR_ID, reaction.author.serialize())
         put(DATE_SENT, reaction.dateSent)
@@ -188,6 +181,14 @@ class ReactionTable(context: Context, databaseHelper: SignalDatabase) : Database
     writableDatabase
       .delete(TABLE_NAME)
       .where("$MESSAGE_ID NOT IN (SELECT ${MessageTable.ID} FROM ${MessageTable.TABLE_NAME})")
+      .run()
+  }
+
+  fun moveReactionsToNewMessage(newMessageId: Long, previousId: Long) {
+    writableDatabase
+      .update(TABLE_NAME)
+      .values(MESSAGE_ID to newMessageId)
+      .where("$MESSAGE_ID = ?", previousId)
       .run()
   }
 }

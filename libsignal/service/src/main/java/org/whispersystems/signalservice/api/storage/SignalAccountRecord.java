@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import javax.annotation.Nullable;
+
 public final class SignalAccountRecord implements SignalRecord {
 
   private static final String TAG = SignalAccountRecord.class.getSimpleName();
@@ -195,6 +197,10 @@ public final class SignalAccountRecord implements SignalRecord {
         diff.add("HasSeenGroupStoryEducationSheet");
       }
 
+      if (!Objects.equals(getUsername(), that.getUsername())) {
+        diff.add("Username");
+      }
+
       return diff.toString();
     } else {
       return "Different class. " + getClass().getSimpleName() + " | " + other.getClass().getSimpleName();
@@ -325,6 +331,10 @@ public final class SignalAccountRecord implements SignalRecord {
     return proto.getHasSeenGroupStoryEducationSheet();
   }
 
+  public @Nullable String getUsername() {
+    return proto.getUsername();
+  }
+
   public AccountRecord toProto() {
     return proto;
   }
@@ -372,11 +382,11 @@ public final class SignalAccountRecord implements SignalRecord {
 
     static PinnedConversation fromRemote(AccountRecord.PinnedConversation remote) {
       if (remote.hasContact()) {
-        ServiceId serviceId = ServiceId.parseOrNull(remote.getContact().getUuid());
+        ServiceId serviceId = ServiceId.parseOrNull(remote.getContact().getServiceId());
         if (serviceId != null) {
           return forContact(new SignalServiceAddress(serviceId, remote.getContact().getE164()));
         } else {
-          Log.w(TAG, "Bad serviceId on pinned contact! Length: " + remote.getContact().getUuid());
+          Log.w(TAG, "Bad serviceId on pinned contact! Length: " + remote.getContact().getServiceId());
           return PinnedConversation.forEmpty();
         }
       } else if (!remote.getLegacyGroupId().isEmpty()) {
@@ -408,7 +418,7 @@ public final class SignalAccountRecord implements SignalRecord {
       if (contact.isPresent()) {
         AccountRecord.PinnedConversation.Contact.Builder contactBuilder = AccountRecord.PinnedConversation.Contact.newBuilder();
 
-        contactBuilder.setUuid(contact.get().getServiceId().toString());
+        contactBuilder.setServiceId(contact.get().getServiceId().toString());
 
         if (contact.get().getNumber().isPresent()) {
           contactBuilder.setE164(contact.get().getNumber().get());
@@ -694,6 +704,16 @@ public final class SignalAccountRecord implements SignalRecord {
 
     public Builder setHasSeenGroupStoryEducationSheet(boolean hasSeenGroupStoryEducationSheet) {
       builder.setHasSeenGroupStoryEducationSheet(hasSeenGroupStoryEducationSheet);
+      return this;
+    }
+
+    public Builder setUsername(@Nullable String username) {
+      if (username == null || username.isEmpty()) {
+        builder.clearUsername();
+      } else {
+        builder.setUsername(username);
+      }
+
       return this;
     }
 

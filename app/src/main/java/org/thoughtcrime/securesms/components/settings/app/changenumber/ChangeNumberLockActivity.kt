@@ -7,6 +7,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.kotlin.subscribeBy
+import org.signal.core.util.concurrent.LifecycleDisposable
 import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.MainActivity
 import org.thoughtcrime.securesms.PassphraseRequiredActivity
@@ -16,8 +17,7 @@ import org.thoughtcrime.securesms.logsubmit.SubmitDebugLogActivity
 import org.thoughtcrime.securesms.phonenumbers.PhoneNumberFormatter
 import org.thoughtcrime.securesms.util.DynamicNoActionBarTheme
 import org.thoughtcrime.securesms.util.DynamicTheme
-import org.thoughtcrime.securesms.util.LifecycleDisposable
-import org.whispersystems.signalservice.api.push.PNI
+import org.whispersystems.signalservice.api.push.ServiceId.PNI
 import java.util.Objects
 
 private val TAG: String = Log.tag(ChangeNumberLockActivity::class.java)

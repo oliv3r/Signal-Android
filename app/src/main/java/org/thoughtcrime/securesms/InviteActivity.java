@@ -21,9 +21,11 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import org.thoughtcrime.securesms.components.ContactFilterView;
 import org.thoughtcrime.securesms.components.ContactFilterView.OnFilterChangedListener;
-import org.thoughtcrime.securesms.contacts.ContactsCursorLoader.DisplayMode;
+import org.thoughtcrime.securesms.contacts.ContactSelectionDisplayMode;
 import org.thoughtcrime.securesms.contacts.SelectedContact;
 import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.groups.SelectionLimits;
@@ -62,7 +64,7 @@ public class InviteActivity extends PassphraseRequiredActivity implements Contac
 
   @Override
   protected void onCreate(Bundle savedInstanceState, boolean ready) {
-    getIntent().putExtra(ContactSelectionListFragment.DISPLAY_MODE, DisplayMode.FLAG_SMS);
+    getIntent().putExtra(ContactSelectionListFragment.DISPLAY_MODE, ContactSelectionDisplayMode.FLAG_SMS);
     getIntent().putExtra(ContactSelectionListFragment.SELECTION_LIMITS, SelectionLimits.NO_LIMITS);
     getIntent().putExtra(ContactSelectionListFragment.HIDE_COUNT, true);
     getIntent().putExtra(ContactSelectionListFragment.REFRESHABLE, false);
@@ -136,7 +138,7 @@ public class InviteActivity extends PassphraseRequiredActivity implements Contac
   }
 
   @Override
-  public void onBeforeContactSelected(@NonNull Optional<RecipientId> recipientId, String number, @NonNull Consumer<Boolean> callback) {
+  public void onBeforeContactSelected(boolean isFromUnknownSearchKey, @NonNull Optional<RecipientId> recipientId, String number, @NonNull Consumer<Boolean> callback) {
     updateSmsButtonText(contactsFragment.getSelectedContacts().size() + 1);
     callback.accept(true);
   }
@@ -217,7 +219,7 @@ public class InviteActivity extends PassphraseRequiredActivity implements Contac
   private class SmsSendClickListener implements OnClickListener {
     @Override
     public void onClick(View v) {
-      new AlertDialog.Builder(InviteActivity.this)
+      new MaterialAlertDialogBuilder(InviteActivity.this)
           .setTitle(getResources().getQuantityString(R.plurals.InviteActivity_send_sms_invites,
                                                      contactsFragment.getSelectedContacts().size(),
                                                      contactsFragment.getSelectedContacts().size()))
@@ -252,13 +254,8 @@ public class InviteActivity extends PassphraseRequiredActivity implements Contac
       for (SelectedContact contact : contacts) {
         RecipientId recipientId    = contact.getOrCreateRecipientId(context);
         Recipient   recipient      = Recipient.resolved(recipientId);
-        int         subscriptionId = recipient.getDefaultSubscriptionId().orElse(-1);
 
-        MessageSender.send(context, OutgoingMessage.sms(recipient, message, subscriptionId), -1L, MessageSender.SendType.SMS, null, null);
-
-        if (recipient.getContactUri() != null) {
-          SignalDatabase.recipients().setHasSentInvite(recipient.getId());
-        }
+        MessageSender.send(context, OutgoingMessage.sms(recipient, message), -1L, MessageSender.SendType.SMS, null, null);
       }
 
       return null;

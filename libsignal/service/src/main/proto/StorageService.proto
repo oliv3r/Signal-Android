@@ -56,8 +56,10 @@ message ManifestRecord {
     Type  type = 2;
   }
 
-           uint64     version     = 1;
-  repeated Identifier identifiers = 2;
+           uint64     version      = 1;
+           uint32     sourceDevice = 3;
+  repeated Identifier identifiers  = 2;
+  // Next ID: 4
 }
 
 message StorageRecord {
@@ -77,9 +79,9 @@ message ContactRecord {
     UNVERIFIED = 2;
   }
 
-  string        serviceId               = 1;
-  string        serviceE164             = 2;
-  string        servicePni              = 15;
+  string        aci                     = 1;
+  string        e164                    = 2;
+  string        pni                     = 15;
   bytes         profileKey              = 3;
   bytes         identityKey             = 4;
   IdentityState identityState           = 5;
@@ -95,8 +97,9 @@ message ContactRecord {
   uint64        unregisteredAtTimestamp = 16;
   string        systemGivenName         = 17;
   string        systemFamilyName        = 18;
-  bool          hidden                  = 19;
-  // NEXT ID: 20
+  string        systemNickname          = 19;
+  bool          hidden                  = 20;
+  // NEXT ID: 21
 }
 
 message GroupV1Record {
@@ -142,8 +145,8 @@ message AccountRecord {
 
   message PinnedConversation {
     message Contact {
-      string uuid = 1;
-      string e164 = 2;
+      string serviceId = 1;
+      string e164      = 2;
     }
 
     oneof identifier {
@@ -185,13 +188,14 @@ message AccountRecord {
            OptionalBool           storyViewReceiptsEnabled        = 30;
            bool                   hasReadOnboardingStory          = 31;
            bool                   hasSeenGroupStoryEducationSheet = 32;
+           string                 username                        = 33;
 }
 
 message StoryDistributionListRecord {
-           bytes  identifier         = 1;
-           string name               = 2;
-  repeated string recipientUuids     = 3;
-           uint64 deletedAtTimestamp = 4;
-           bool   allowsReplies      = 5;
-           bool   isBlockList        = 6;
+           bytes  identifier          = 1;
+           string name                = 2;
+  repeated string recipientServiceIds = 3;
+           uint64 deletedAtTimestamp  = 4;
+           bool   allowsReplies       = 5;
+           bool   isBlockList         = 6;
 }

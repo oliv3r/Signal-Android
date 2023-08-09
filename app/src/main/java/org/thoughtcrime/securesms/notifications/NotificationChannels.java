@@ -7,6 +7,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationChannelGroup;
 import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.media.AudioAttributes;
@@ -55,28 +56,30 @@ public class NotificationChannels {
   private static final long[] EMPTY_VIBRATION_PATTERN = new long[] { 0 };
 
   private static class Version {
-    static final int MESSAGES_CATEGORY   = 2;
-    static final int CALLS_PRIORITY_BUMP = 3;
-    static final int VIBRATE_OFF_OTHER   = 4;
+    static final int MESSAGES_CATEGORY      = 2;
+    static final int CALLS_PRIORITY_BUMP    = 3;
+    static final int VIBRATE_OFF_OTHER      = 4;
+    static final int AUDIO_ATTRIBUTE_CHANGE = 5;
   }
 
-  private static final int VERSION = 4;
+  private static final int VERSION = 5;
 
   private static final String CATEGORY_MESSAGES = "messages";
   private static final String CONTACT_PREFIX    = "contact_";
   private static final String MESSAGES_PREFIX   = "messages_";
 
-  public final String CALLS         = "calls_v3";
-  public final String FAILURES      = "failures";
-  public final String APP_UPDATES   = "app_updates";
-  public final String BACKUPS       = "backups_v2";
-  public final String LOCKED_STATUS = "locked_status_v2";
-  public final String OTHER         = "other_v3";
-  public final String VOICE_NOTES   = "voice_notes";
-  public final String JOIN_EVENTS   = "join_events";
-  public final String BACKGROUND    = "background_connection";
-  public final String CALL_STATUS   = "call_status";
-  public final String APP_ALERTS    = "app_alerts";
+  public final String CALLS                            = "calls_v3";
+  public final String FAILURES                         = "failures";
+  public final String APP_UPDATES                      = "app_updates";
+  public final String BACKUPS                          = "backups_v2";
+  public final String LOCKED_STATUS                    = "locked_status_v2";
+  public final String OTHER                            = "other_v3";
+  public final String VOICE_NOTES                      = "voice_notes";
+  public final String JOIN_EVENTS                      = "join_events";
+  public final String BACKGROUND                       = "background_connection";
+  public final String CALL_STATUS                      = "call_status";
+  public final String APP_ALERTS                       = "app_alerts";
+  public final String ADDITIONAL_MESSAGE_NOTIFICATIONS = "additional_message_notifications";
 
   private static volatile NotificationChannels instance;
 
@@ -249,7 +252,7 @@ public class NotificationChannels {
 
     if (messageSound != null) {
       channel.setSound(messageSound, new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
-                                                                  .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                                                                  .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                                                                   .build());
     }
 
@@ -619,17 +622,18 @@ public class NotificationChannels {
     NotificationChannelGroup messagesGroup = new NotificationChannelGroup(CATEGORY_MESSAGES, context.getResources().getString(R.string.NotificationChannel_group_chats));
     notificationManager.createNotificationChannelGroup(messagesGroup);
 
-    NotificationChannel messages     = new NotificationChannel(getMessagesChannel(), context.getString(R.string.NotificationChannel_channel_messages), NotificationManager.IMPORTANCE_HIGH);
-    NotificationChannel calls        = new NotificationChannel(CALLS, context.getString(R.string.NotificationChannel_calls), NotificationManager.IMPORTANCE_HIGH);
-    NotificationChannel failures     = new NotificationChannel(FAILURES, context.getString(R.string.NotificationChannel_failures), NotificationManager.IMPORTANCE_HIGH);
-    NotificationChannel backups      = new NotificationChannel(BACKUPS, context.getString(R.string.NotificationChannel_backups), NotificationManager.IMPORTANCE_LOW);
-    NotificationChannel lockedStatus = new NotificationChannel(LOCKED_STATUS, context.getString(R.string.NotificationChannel_locked_status), NotificationManager.IMPORTANCE_LOW);
-    NotificationChannel other        = new NotificationChannel(OTHER, context.getString(R.string.NotificationChannel_other), NotificationManager.IMPORTANCE_LOW);
-    NotificationChannel voiceNotes   = new NotificationChannel(VOICE_NOTES, context.getString(R.string.NotificationChannel_voice_notes), NotificationManager.IMPORTANCE_LOW);
-    NotificationChannel joinEvents   = new NotificationChannel(JOIN_EVENTS, context.getString(R.string.NotificationChannel_contact_joined_signal), NotificationManager.IMPORTANCE_DEFAULT);
-    NotificationChannel background   = new NotificationChannel(BACKGROUND, context.getString(R.string.NotificationChannel_background_connection), getDefaultBackgroundChannelImportance(notificationManager));
-    NotificationChannel callStatus   = new NotificationChannel(CALL_STATUS, context.getString(R.string.NotificationChannel_call_status), NotificationManager.IMPORTANCE_LOW);
-    NotificationChannel appAlerts    = new NotificationChannel(APP_ALERTS, context.getString(R.string.NotificationChannel_critical_app_alerts), NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel messages                       = new NotificationChannel(getMessagesChannel(), context.getString(R.string.NotificationChannel_channel_messages), NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel calls                          = new NotificationChannel(CALLS, context.getString(R.string.NotificationChannel_calls), NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel failures                       = new NotificationChannel(FAILURES, context.getString(R.string.NotificationChannel_failures), NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel backups                        = new NotificationChannel(BACKUPS, context.getString(R.string.NotificationChannel_backups), NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel lockedStatus                   = new NotificationChannel(LOCKED_STATUS, context.getString(R.string.NotificationChannel_locked_status), NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel other                          = new NotificationChannel(OTHER, context.getString(R.string.NotificationChannel_other), NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel voiceNotes                     = new NotificationChannel(VOICE_NOTES, context.getString(R.string.NotificationChannel_voice_notes), NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel joinEvents                     = new NotificationChannel(JOIN_EVENTS, context.getString(R.string.NotificationChannel_contact_joined_signal), NotificationManager.IMPORTANCE_DEFAULT);
+    NotificationChannel background                     = new NotificationChannel(BACKGROUND, context.getString(R.string.NotificationChannel_background_connection), getDefaultBackgroundChannelImportance(notificationManager));
+    NotificationChannel callStatus                     = new NotificationChannel(CALL_STATUS, context.getString(R.string.NotificationChannel_call_status), NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel appAlerts                      = new NotificationChannel(APP_ALERTS, context.getString(R.string.NotificationChannel_critical_app_alerts), NotificationManager.IMPORTANCE_HIGH);
+    NotificationChannel additionalMessageNotifications = new NotificationChannel(ADDITIONAL_MESSAGE_NOTIFICATIONS, context.getString(R.string.NotificationChannel_additional_message_notifications), NotificationManager.IMPORTANCE_HIGH);
 
     messages.setGroup(CATEGORY_MESSAGES);
     setVibrationEnabled(messages, SignalStore.settings().isMessageVibrateEnabled());
@@ -647,10 +651,10 @@ public class NotificationChannels {
     callStatus.setShowBadge(false);
     appAlerts.setShowBadge(false);
 
-    notificationManager.createNotificationChannels(Arrays.asList(messages, calls, failures, backups, lockedStatus, other, voiceNotes, joinEvents, background, callStatus, appAlerts));
+    notificationManager.createNotificationChannels(Arrays.asList(messages, calls, failures, backups, lockedStatus, other, voiceNotes, joinEvents, background, callStatus, appAlerts, additionalMessageNotifications));
 
     if (BuildConfig.PLAY_STORE_DISABLED) {
-      NotificationChannel appUpdates = new NotificationChannel(APP_UPDATES, context.getString(R.string.NotificationChannel_app_updates), NotificationManager.IMPORTANCE_HIGH);
+      NotificationChannel appUpdates = new NotificationChannel(APP_UPDATES, context.getString(R.string.NotificationChannel_app_updates), NotificationManager.IMPORTANCE_DEFAULT);
       notificationManager.createNotificationChannel(appUpdates);
     } else {
       notificationManager.deleteNotificationChannel(APP_UPDATES);
@@ -687,6 +691,37 @@ public class NotificationChannels {
 
     if (oldVersion < Version.VIBRATE_OFF_OTHER) {
       notificationManager.deleteNotificationChannel("other_v2");
+    }
+
+    if (oldVersion < Version.AUDIO_ATTRIBUTE_CHANGE) {
+      Context context                       = ApplicationDependencies.getApplication();
+      int     existingMessageChannelVersion = TextSecurePreferences.getNotificationMessagesChannelVersion(context);
+      int     newMessageChannelVersion      = existingMessageChannelVersion + 1;
+      String  existingChannelId             = "messages_" + existingMessageChannelVersion;
+      String  newChannelId                  = "messages_" + newMessageChannelVersion;
+
+      Log.i(TAG, "Migrating message channel from version " + existingMessageChannelVersion + " to " + newMessageChannelVersion);
+
+      NotificationChannel existingChannel = notificationManager.getNotificationChannel(existingChannelId);
+      if (existingChannel != null) {
+        notificationManager.deleteNotificationChannel(existingChannelId);
+
+        NotificationChannel newChannel = new NotificationChannel(newChannelId, existingChannel.getName(), existingChannel.getImportance());
+
+        newChannel.setGroup(existingChannel.getGroup());
+        newChannel.setSound(existingChannel.getSound(), new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN).setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
+        newChannel.setBypassDnd(existingChannel.canBypassDnd());
+        newChannel.setVibrationPattern(existingChannel.getVibrationPattern());
+        newChannel.enableVibration(existingChannel.shouldVibrate());
+        newChannel.setLockscreenVisibility(existingChannel.getLockscreenVisibility());
+        newChannel.setShowBadge(existingChannel.canShowBadge());
+        newChannel.setLightColor(existingChannel.getLightColor());
+        newChannel.enableLights(existingChannel.shouldShowLights());
+
+        notificationManager.createNotificationChannel(newChannel);
+
+        TextSecurePreferences.setNotificationMessagesChannelVersion(context, newMessageChannelVersion);
+      }
     }
   }
 
@@ -784,10 +819,9 @@ public class NotificationChannels {
     return true;
   }
 
-  @TargetApi(21)
   private static AudioAttributes getRingtoneAudioAttributes() {
     return new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
-        .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
         .build();
   }
 

@@ -1,6 +1,8 @@
 package org.signal.core.util
 
 import android.database.Cursor
+import androidx.core.database.getLongOrNull
+import androidx.core.database.getStringOrNull
 import java.util.Optional
 
 fun Cursor.requireString(column: String): String? {
@@ -29,6 +31,10 @@ fun Cursor.requireFloat(column: String): Float {
 
 fun Cursor.requireLong(column: String): Long {
   return CursorUtil.requireLong(this, column)
+}
+
+fun Cursor.requireLongOrNull(column: String): Long? {
+  return this.getLongOrNull(this.getColumnIndexOrThrow(column))
 }
 
 fun Cursor.optionalLong(column: String): Optional<Long> {
@@ -113,6 +119,16 @@ fun Cursor.readToSingleInt(defaultValue: Int = 0): Int {
   }
 }
 
+fun Cursor.readToSingleBoolean(defaultValue: Boolean = false): Boolean {
+  return use {
+    if (it.moveToFirst()) {
+      it.getInt(0) != 0
+    } else {
+      defaultValue
+    }
+  }
+}
+
 @JvmOverloads
 inline fun <T> Cursor.readToList(predicate: (T) -> Boolean = { true }, mapper: (Cursor) -> T): List<T> {
   val list = mutableListOf<T>()
@@ -125,6 +141,11 @@ inline fun <T> Cursor.readToList(predicate: (T) -> Boolean = { true }, mapper: (
     }
   }
   return list
+}
+
+@JvmOverloads
+inline fun <K, V> Cursor.readToMap(predicate: (Pair<K, V>) -> Boolean = { true }, mapper: (Cursor) -> Pair<K, V>): Map<K, V> {
+  return readToList(predicate, mapper).associate { it }
 }
 
 inline fun <T> Cursor.readToSet(predicate: (T) -> Boolean = { true }, mapper: (Cursor) -> T): Set<T> {
@@ -152,4 +173,32 @@ inline fun <T> Cursor.firstOrNull(predicate: (T) -> Boolean = { true }, mapper: 
   return null
 }
 
+inline fun Cursor.forEach(operation: (Cursor) -> Unit) {
+  use {
+    while (moveToNext()) {
+      operation(this)
+    }
+  }
+}
+
 fun Boolean.toInt(): Int = if (this) 1 else 0
+
+/**
+ * Renders the entire cursor row as a string.
+ * Not necessarily used in the app, but very useful to have available when debugging.
+ */
+fun Cursor.rowToString(): String {
+  val builder = StringBuilder()
+  for (i in 0 until this.columnCount) {
+    builder
+      .append(this.getColumnName(i))
+      .append("=")
+      .append(this.getStringOrNull(i))
+
+    if (i < this.columnCount - 1) {
+      builder.append(", ")
+    }
+  }
+
+  return builder.toString()
+}

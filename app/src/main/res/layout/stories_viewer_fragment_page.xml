@@ -23,7 +23,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0">
 
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/story_content_card"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -71,7 +71,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <org.thoughtcrime.securesms.stories.StoryVolumeOverlayView
             android:id="@+id/story_volume_overlay"
@@ -306,7 +306,7 @@
         android:maxLines="1"
         android:textAppearance="@style/Signal.Text.MaterialCaption"
         android:visibility="gone"
-        app:drawableStartCompat="@drawable/ic_stories_16"
+        app:drawableStartCompat="@drawable/symbol_stories_fill_compact_12"
         app:drawableTint="@color/transparent_white_80"
         app:layout_constraintBottom_toTopOf="@id/progress"
         app:layout_constraintEnd_toStartOf="@id/more"

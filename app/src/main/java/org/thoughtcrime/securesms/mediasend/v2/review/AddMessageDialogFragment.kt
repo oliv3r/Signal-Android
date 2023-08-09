@@ -128,15 +128,11 @@ class AddMessageDialogFragment : KeyboardEntryDialogFragment(R.layout.v2_media_a
     ViewUtil.focusAndShowKeyboard(binding.content.addAMessageInput)
   }
 
-  override fun onPause() {
-    super.onPause()
-
-    ViewUtil.hideKeyboard(requireContext(), binding.content.addAMessageInput)
-  }
-
   override fun onDismiss(dialog: DialogInterface) {
     super.onDismiss(dialog)
-    viewModel.setMessage(binding.content.addAMessageInput.text)
+    if (isResumed) {
+      viewModel.setMessage(binding.content.addAMessageInput.text)
+    }
   }
 
   override fun onKeyboardHidden() {
@@ -165,7 +161,6 @@ class AddMessageDialogFragment : KeyboardEntryDialogFragment(R.layout.v2_media_a
     mentionsViewModel = ViewModelProvider(requireActivity(), MentionsPickerViewModel.Factory()).get(MentionsPickerViewModel::class.java)
 
     inlineQueryResultsController = InlineQueryResultsController(
-      requireContext(),
       inlineQueryViewModel,
       requireView().findViewById(R.id.background_holder),
       (requireView() as ViewGroup),
@@ -214,7 +209,6 @@ class AddMessageDialogFragment : KeyboardEntryDialogFragment(R.layout.v2_media_a
         if (!recipient.isPushV2Group) {
           annotations
         } else {
-
           val validRecipientIds: Set<String> = recipient.participantIds
             .map { id -> MentionAnnotation.idToMentionAnnotationValue(id) }
             .toSet()
@@ -253,11 +247,7 @@ class AddMessageDialogFragment : KeyboardEntryDialogFragment(R.layout.v2_media_a
       binding.hud.showSoftkey(binding.content.addAMessageInput)
     } else {
       requestedEmojiDrawer = true
-      binding.hud.hideSoftkey(binding.content.addAMessageInput) {
-        binding.hud.post {
-          binding.hud.show(binding.content.addAMessageInput, emojiDrawerStub.get())
-        }
-      }
+      binding.hud.show(binding.content.addAMessageInput, emojiDrawerStub.get())
     }
   }
 

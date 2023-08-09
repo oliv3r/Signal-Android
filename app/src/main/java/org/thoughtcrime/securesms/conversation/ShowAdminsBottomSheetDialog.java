@@ -23,7 +23,8 @@ import org.thoughtcrime.securesms.groups.ui.GroupMemberListView;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.util.BottomSheetUtil;
 import org.thoughtcrime.securesms.util.CommunicationActions;
-import org.thoughtcrime.securesms.util.LifecycleDisposable;
+import org.signal.core.util.concurrent.LifecycleDisposable;
+import org.thoughtcrime.securesms.util.WindowUtil;
 
 import java.util.Collections;
 import java.util.List;
@@ -79,6 +80,12 @@ public final class ShowAdminsBottomSheetDialog extends BottomSheetDialogFragment
                           .subscribeOn(Schedulers.io())
                           .observeOn(AndroidSchedulers.mainThread())
                           .subscribe(list::setDisplayOnlyMembers));
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    WindowUtil.initializeScreenshotSecurity(requireContext(), requireDialog().getWindow());
   }
 
   @Override

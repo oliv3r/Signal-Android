@@ -5,6 +5,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
+@Suppress("ClassName")
 @RunWith(Parameterized::class)
 class StringExtensions_asListContains(
   private val model: String,
@@ -32,7 +33,7 @@ class StringExtensions_asListContains(
 
         arrayOf("a", "b", false),
         arrayOf("a", "abc", false),
-        arrayOf("b", "a*", false),
+        arrayOf("b", "a*", false)
       ).toList()
     }
   }

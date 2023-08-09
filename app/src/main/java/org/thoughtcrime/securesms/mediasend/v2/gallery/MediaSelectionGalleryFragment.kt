@@ -10,6 +10,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.ItemTouchHelper
 import app.cash.exhaustive.Exhaustive
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import org.signal.core.util.concurrent.LifecycleDisposable
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.mediasend.Media
 import org.thoughtcrime.securesms.mediasend.v2.MediaSelectionNavigator
@@ -18,7 +19,6 @@ import org.thoughtcrime.securesms.mediasend.v2.MediaSelectionViewModel
 import org.thoughtcrime.securesms.mediasend.v2.MediaValidator
 import org.thoughtcrime.securesms.mediasend.v2.review.MediaSelectionItemTouchHelper
 import org.thoughtcrime.securesms.permissions.Permissions
-import org.thoughtcrime.securesms.util.LifecycleDisposable
 
 private const val MEDIA_GALLERY_TAG = "MEDIA_GALLERY"
 
@@ -37,7 +37,14 @@ class MediaSelectionGalleryFragment : Fragment(R.layout.fragment_container), Med
   )
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    val isFirst = arguments?.getBoolean("suppressEmptyError") ?: arguments?.getBoolean("first") ?: false
+    val args = arguments
+    val isFirst = when {
+      args == null -> false
+      args.containsKey("suppressEmptyError") -> args.getBoolean("suppressEmptyError")
+      args.containsKey("first") -> args.getBoolean("first")
+      else -> false
+    }
+
     sharedViewModel.setSuppressEmptyError(isFirst)
     mediaGalleryFragment = ensureMediaGalleryFragment()
 

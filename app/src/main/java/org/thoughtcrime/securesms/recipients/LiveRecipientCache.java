@@ -21,7 +21,7 @@ import org.signal.core.util.CursorUtil;
 import org.thoughtcrime.securesms.util.LRUCache;
 import org.signal.core.util.Stopwatch;
 import org.thoughtcrime.securesms.util.concurrent.FilteredExecutor;
-import org.whispersystems.signalservice.api.push.ACI;
+import org.whispersystems.signalservice.api.push.ServiceId.ACI;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -49,7 +49,7 @@ public final class LiveRecipientCache {
   private final AtomicBoolean                warmedUp;
 
   public LiveRecipientCache(@NonNull Context context) {
-    this(context, ThreadUtil.trace(new FilteredExecutor(SignalExecutors.newCachedBoundedExecutor("signal-recipients", 1, 4, 15), () -> !SignalDatabase.inTransaction())));
+    this(context, new FilteredExecutor(SignalExecutors.newCachedBoundedExecutor("signal-recipients", ThreadUtil.PRIORITY_UI_BLOCKING_THREAD, 1, 4, 15), () -> !SignalDatabase.inTransaction()));
   }
 
   @VisibleForTesting
@@ -160,7 +160,7 @@ public final class LiveRecipientCache {
       }
 
       if (localAci != null) {
-        selfId = recipientTable.getByServiceId(localAci).orElse(null);
+        selfId = recipientTable.getByAci(localAci).orElse(null);
       }
 
       if (selfId == null && localE164 != null) {
@@ -168,7 +168,9 @@ public final class LiveRecipientCache {
       }
 
       if (selfId == null) {
+        Log.i(TAG, "Creating self for the first time.");
         selfId = recipientTable.getAndPossiblyMerge(localAci, localE164);
+        recipientTable.updatePendingSelfData(selfId);
       }
 
       synchronized (localRecipientId) {

@@ -7,6 +7,7 @@ import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@Suppress("ClassName")
 @RunWith(value = ParameterizedRobolectricTestRunner::class)
 @Config(manifest = Config.NONE, application = Application::class)
 class NameUtil_getAbbreviation(
@@ -33,7 +34,7 @@ class NameUtil_getAbbreviation(
       arrayOf("љabc ђ123", "љђ"),
       // Works on device, but for whatever reason doesn't work in robolectric
 //      arrayOf("Bob \uD83C\uDDE8\uD83C\uDDFF", "B\uD83C\uDDE8\uD83C\uDDFF"),
-      arrayOf("", null),
+      arrayOf("", null)
     )
   }
 }

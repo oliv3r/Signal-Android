@@ -3,6 +3,7 @@ package org.thoughtcrime.securesms.jobs;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 
 import com.annimon.stream.Collectors;
@@ -12,8 +13,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import org.signal.core.util.logging.Log;
 import org.signal.storageservice.protos.groups.local.DecryptedGroup;
 import org.thoughtcrime.securesms.database.RecipientTable;
+import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.groups.GroupId;
-import org.thoughtcrime.securesms.jobmanager.Data;
+import org.thoughtcrime.securesms.jobmanager.JsonJobData;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.messages.GroupSendUtil;
@@ -32,6 +34,7 @@ import org.whispersystems.signalservice.api.messages.SendMessageResult;
 import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
 import org.whispersystems.signalservice.api.messages.SignalServiceGroupV2;
 import org.whispersystems.signalservice.api.push.ServiceId;
+import org.whispersystems.signalservice.api.push.ServiceId.ACI;
 import org.whispersystems.signalservice.api.push.exceptions.ServerRejectedException;
 import org.whispersystems.signalservice.api.util.UuidUtil;
 import org.whispersystems.signalservice.internal.push.SignalServiceProtos;
@@ -70,13 +73,18 @@ public final class PushGroupSilentUpdateSendJob extends BaseJob {
                                     @NonNull DecryptedGroup decryptedGroup,
                                     @NonNull OutgoingMessage groupMessage)
   {
-    List<UUID> memberUuids  = DecryptedGroupUtil.toUuidList(decryptedGroup.getMembersList());
-    List<UUID> pendingUuids = DecryptedGroupUtil.pendingToUuidList(decryptedGroup.getPendingMembersList());
+    List<UUID>      memberUuids       = DecryptedGroupUtil.toUuidList(decryptedGroup.getMembersList());
+    List<ServiceId> pendingServiceIds = DecryptedGroupUtil.pendingToServiceIdList(decryptedGroup.getPendingMembersList());
 
-    Set<RecipientId> recipients = Stream.concat(Stream.of(memberUuids), Stream.of(pendingUuids))
-                                        .filter(uuid -> !UuidUtil.UNKNOWN_UUID.equals(uuid))
-                                        .filter(uuid -> !SignalStore.account().requireAci().uuid().equals(uuid))
-                                        .map(uuid -> Recipient.externalPush(ServiceId.from(uuid)))
+    Stream<ServiceId> memberServiceIds          = Stream.of(memberUuids)
+                                                        .filter(uuid -> !UuidUtil.UNKNOWN_UUID.equals(uuid))
+                                                        .filter(uuid -> !SignalStore.account().requireAci().getRawUuid().equals(uuid))
+                                                        .map(ACI::from);
+    Stream<ServiceId> filteredPendingServiceIds = Stream.of(pendingServiceIds)
+                                                        .filterNot(ServiceId::isUnknown);
+
+    Set<RecipientId> recipients = Stream.concat(memberServiceIds, filteredPendingServiceIds)
+                                        .map(serviceId -> Recipient.externalPush(serviceId))
                                         .filter(recipient -> recipient.getRegistered() != RecipientTable.RegisteredState.NOT_REGISTERED)
                                         .map(Recipient::getId)
                                         .collect(Collectors.toSet());
@@ -112,12 +120,12 @@ public final class PushGroupSilentUpdateSendJob extends BaseJob {
   }
 
   @Override
-  public @NonNull Data serialize() {
-    return new Data.Builder().putString(KEY_RECIPIENTS, RecipientId.toSerializedList(recipients))
-                             .putInt(KEY_INITIAL_RECIPIENT_COUNT, initialRecipientCount)
-                             .putLong(KEY_TIMESTAMP, timestamp)
-                             .putString(KEY_GROUP_CONTEXT_V2, Base64.encodeBytes(groupContextV2.toByteArray()))
-                             .build();
+  public @Nullable byte[] serialize() {
+    return new JsonJobData.Builder().putString(KEY_RECIPIENTS, RecipientId.toSerializedList(recipients))
+                                    .putInt(KEY_INITIAL_RECIPIENT_COUNT, initialRecipientCount)
+                                    .putLong(KEY_TIMESTAMP, timestamp)
+                                    .putString(KEY_GROUP_CONTEXT_V2, Base64.encodeBytes(groupContextV2.toByteArray()))
+                                    .serialize();
   }
 
   @Override
@@ -177,12 +185,20 @@ public final class PushGroupSilentUpdateSendJob extends BaseJob {
 
     List<SendMessageResult> results = GroupSendUtil.sendUnresendableDataMessage(context, groupId, destinations, false, ContentHint.IMPLICIT, groupDataMessage, false);
 
-    return GroupSendJobHelper.getCompletedSends(destinations, results).completed;
+    GroupSendJobHelper.SendResult groupResult = GroupSendJobHelper.getCompletedSends(destinations, results);
+
+    for (RecipientId unregistered : groupResult.unregistered) {
+      SignalDatabase.recipients().markUnregistered(unregistered);
+    }
+
+    return groupResult.completed;
   }
 
   public static class Factory implements Job.Factory<PushGroupSilentUpdateSendJob> {
     @Override
-    public @NonNull PushGroupSilentUpdateSendJob create(@NonNull Parameters parameters, @NonNull Data data) {
+    public @NonNull PushGroupSilentUpdateSendJob create(@NonNull Parameters parameters, @Nullable byte[] serializedData) {
+      JsonJobData data = JsonJobData.deserialize(serializedData);
+
       List<RecipientId> recipients            = RecipientId.fromSerializedList(data.getString(KEY_RECIPIENTS));
       int               initialRecipientCount = data.getInt(KEY_INITIAL_RECIPIENT_COUNT);
       long              timestamp             = data.getLong(KEY_TIMESTAMP);

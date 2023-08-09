@@ -20,10 +20,10 @@ public class DigestingRequestBodyTest {
   private final byte[] attachmentIV  = Util.getSecretBytes(16);
   private final byte[] input         = Util.getSecretBytes(CONTENT_LENGTH);
 
-  private final OutputStreamFactory outputStreamFactory = new AttachmentCipherOutputStreamFactory(attachmentKey, attachmentIV);
+  private final OutputStreamFactory outputStreamFactory = new LegacyAttachmentCipherOutputStreamFactory(attachmentKey, attachmentIV);
 
   @Test
-  public void givenSameKeyAndIV_whenIWriteToBuffer_thenIExpectSameTransmittedDigest() throws Exception {
+  public void givenSameKeyAndIV_whenIWriteToBuffer_thenIExpectSameDigests() throws Exception {
     DigestingRequestBody fromStart  = getBody(0);
     DigestingRequestBody fromMiddle = getBody(CONTENT_LENGTH / 2);
 
@@ -36,6 +36,7 @@ public class DigestingRequestBodyTest {
     }
 
     assertArrayEquals(fromStart.getTransmittedDigest(), fromMiddle.getTransmittedDigest());
+    assertArrayEquals(fromStart.getIncrementalDigest(), fromMiddle.getIncrementalDigest());
   }
 
   @Test

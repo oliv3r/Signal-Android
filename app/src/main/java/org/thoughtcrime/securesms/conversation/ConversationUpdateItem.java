@@ -51,6 +51,7 @@ import org.thoughtcrime.securesms.util.concurrent.ListenableFuture;
 import org.thoughtcrime.securesms.util.livedata.LiveDataUtil;
 import org.thoughtcrime.securesms.verify.VerifyIdentityActivity;
 import org.whispersystems.signalservice.api.push.ServiceId;
+import org.whispersystems.signalservice.api.push.ServiceId.ACI;
 
 import java.util.Collection;
 import java.util.Locale;
@@ -157,10 +158,10 @@ public final class ConversationUpdateItem extends FrameLayout
     this.conversationRecipient    = conversationRecipient;
     this.isMessageRequestAccepted = isMessageRequestAccepted;
 
-    senderObserver.observe(lifecycleOwner, messageRecord.getIndividualRecipient());
+    senderObserver.observe(lifecycleOwner, messageRecord.getFromRecipient());
 
     if (conversationRecipient.isActiveGroup() &&
-        (messageRecord.isGroupCall() || messageRecord.isCollapsedGroupV2JoinUpdate() || messageRecord.isGroupV2JoinRequest(messageRecord.getIndividualRecipient().getServiceId().orElse(null)))) {
+        (messageRecord.isGroupCall() || messageRecord.isCollapsedGroupV2JoinUpdate() || messageRecord.isGroupV2JoinRequest(messageRecord.getFromRecipient().getServiceId().orElse(null)))) {
       groupObserver.observe(lifecycleOwner, conversationRecipient);
       groupData.observe(lifecycleOwner, conversationRecipient);
     } else {
@@ -254,6 +255,11 @@ public final class ConversationUpdateItem extends FrameLayout
     return background;
   }
 
+  @Override
+  public @NonNull ViewGroup getRoot() {
+    return this;
+  }
+
   static final class RecipientObserverManager {
 
     private final Observer<Recipient> recipientObserver;
@@ -286,11 +292,11 @@ public final class ConversationUpdateItem extends FrameLayout
 
     private final Observer<Object> updater;
 
-    private LiveGroup           liveGroup;
-    private LiveData<Boolean>   liveIsSelfAdmin;
-    private LiveData<Set<UUID>> liveBannedMembers;
-    private LiveData<Set<UUID>> liveFullMembers;
-    private Recipient           conversationRecipient;
+    private LiveGroup                liveGroup;
+    private LiveData<Boolean>        liveIsSelfAdmin;
+    private LiveData<Set<ServiceId>> liveBannedMembers;
+    private LiveData<Set<UUID>>      liveFullMembers;
+    private Recipient                conversationRecipient;
 
     GroupDataManager() {
       this.updater = unused -> update();
@@ -310,7 +316,7 @@ public final class ConversationUpdateItem extends FrameLayout
         liveBannedMembers     = liveGroup.getBannedMembers();
         liveFullMembers       = Transformations.map(liveGroup.getFullMembers(),
                                                     members -> members.stream()
-                                                                      .map(m -> m.getMember().requireServiceId().uuid())
+                                                                      .map(m -> m.getMember().requireAci().getRawUuid())
                                                                       .collect(Collectors.toSet()));
 
         liveIsSelfAdmin.observe(lifecycleOwner, updater);
@@ -336,9 +342,9 @@ public final class ConversationUpdateItem extends FrameLayout
         return false;
       }
 
-      Set<UUID> bannedMembers = liveBannedMembers.getValue();
+      Set<ServiceId> bannedMembers = liveBannedMembers.getValue();
       if (bannedMembers != null) {
-        return recipient.getServiceId().isPresent() && bannedMembers.contains(recipient.requireServiceId().uuid());
+        return recipient.getServiceId().isPresent() && bannedMembers.contains(recipient.requireServiceId());
       }
       return false;
     }
@@ -350,7 +356,7 @@ public final class ConversationUpdateItem extends FrameLayout
 
       Set<UUID> members = liveFullMembers.getValue();
       if (members != null) {
-        return recipient.getServiceId().isPresent() && members.contains(recipient.requireServiceId().uuid());
+        return recipient.hasAci() && members.contains(recipient.requireAci().getRawUuid());
       }
       return false;
     }
@@ -437,16 +443,16 @@ public final class ConversationUpdateItem extends FrameLayout
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onSafetyNumberLearnMoreClicked(conversationMessage.getMessageRecord().getIndividualRecipient());
+          eventListener.onSafetyNumberLearnMoreClicked(conversationMessage.getMessageRecord().getFromRecipient());
         }
       });
     } else if (conversationMessage.getMessageRecord().isGroupCall()) {
-      UpdateDescription     updateDescription = MessageRecord.getGroupCallUpdateDescription(getContext(), conversationMessage.getMessageRecord().getBody(), true);
-      Collection<ServiceId> sids              = updateDescription.getMentioned();
+      UpdateDescription updateDescription = MessageRecord.getGroupCallUpdateDescription(getContext(), conversationMessage.getMessageRecord().getBody(), true);
+      Collection<ACI>   acis              = updateDescription.getMentioned();
 
       int text = 0;
-      if (Util.hasItems(sids)) {
-        if (sids.contains(SignalStore.account().requireAci())) {
+      if (Util.hasItems(acis)) {
+        if (acis.contains(SignalStore.account().requireAci())) {
           text = R.string.ConversationUpdateItem_return_to_call;
         } else if (GroupCallUpdateDetailsUtil.parse(conversationMessage.getMessageRecord().getBody()).getIsCallFull()) {
           text = R.string.ConversationUpdateItem_call_is_full;
@@ -507,15 +513,15 @@ public final class ConversationUpdateItem extends FrameLayout
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onBadDecryptLearnMoreClicked(conversationMessage.getMessageRecord().getRecipient().getId());
+          eventListener.onBadDecryptLearnMoreClicked(conversationMessage.getMessageRecord().getFromRecipient().getId());
         }
       });
-    } else if (conversationMessage.getMessageRecord().isChangeNumber() && conversationMessage.getMessageRecord().getIndividualRecipient().isSystemContact()) {
+    } else if (conversationMessage.getMessageRecord().isChangeNumber() && conversationMessage.getMessageRecord().getFromRecipient().isSystemContact()) {
       actionButton.setText(R.string.ConversationUpdateItem_update_contact);
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onChangeNumberUpdateContact(conversationMessage.getMessageRecord().getIndividualRecipient());
+          eventListener.onChangeNumberUpdateContact(conversationMessage.getMessageRecord().getFromRecipient());
         }
       });
     } else if (shouldShowBlockRequestAction(conversationMessage.getMessageRecord())) {
@@ -523,7 +529,7 @@ public final class ConversationUpdateItem extends FrameLayout
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onBlockJoinRequest(conversationMessage.getMessageRecord().getIndividualRecipient());
+          eventListener.onBlockJoinRequest(conversationMessage.getMessageRecord().getFromRecipient());
         }
       });
     } else if (conversationMessage.getMessageRecord().isBoostRequest()) {
@@ -557,7 +563,7 @@ public final class ConversationUpdateItem extends FrameLayout
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onSendPaymentClicked(conversationMessage.getMessageRecord().getIndividualRecipient().getId());
+          eventListener.onSendPaymentClicked(conversationMessage.getMessageRecord().getFromRecipient().getId());
         }
       });
     } else{
@@ -567,7 +573,7 @@ public final class ConversationUpdateItem extends FrameLayout
   }
 
   private boolean shouldShowBlockRequestAction(MessageRecord messageRecord) {
-    Recipient toBlock = messageRecord.getIndividualRecipient();
+    Recipient toBlock = messageRecord.getFromRecipient();
 
     if (!toBlock.hasServiceId() || !groupData.isSelfAdmin() || groupData.isBanned(toBlock) || groupData.isFullMember(toBlock)) {
       return false;

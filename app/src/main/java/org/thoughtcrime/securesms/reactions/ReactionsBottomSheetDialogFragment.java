@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -25,7 +24,7 @@ import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.components.emoji.EmojiImageView;
 import org.thoughtcrime.securesms.database.model.MessageId;
 import org.thoughtcrime.securesms.util.FullscreenHelper;
-import org.thoughtcrime.securesms.util.LifecycleDisposable;
+import org.signal.core.util.concurrent.LifecycleDisposable;
 import org.thoughtcrime.securesms.util.WindowUtil;
 
 import java.util.Objects;
@@ -103,6 +102,12 @@ public final class ReactionsBottomSheetDialogFragment extends BottomSheetDialogF
 
     MessageId messageId = new MessageId(requireArguments().getLong(ARGS_MESSAGE_ID));
     setUpViewModel(messageId);
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    WindowUtil.initializeScreenshotSecurity(requireContext(), requireDialog().getWindow());
   }
 
   @Override

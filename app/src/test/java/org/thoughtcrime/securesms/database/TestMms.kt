@@ -20,7 +20,6 @@ object TestMms {
     body: String = "body",
     sentTimeMillis: Long = System.currentTimeMillis(),
     receivedTimestampMillis: Long = System.currentTimeMillis(),
-    subscriptionId: Int = -1,
     expiresIn: Long = 0,
     viewOnce: Boolean = false,
     distributionType: Int = ThreadTable.DistributionTypes.DEFAULT,
@@ -35,7 +34,6 @@ object TestMms {
       body,
       emptyList(),
       sentTimeMillis,
-      subscriptionId,
       expiresIn,
       viewOnce,
       distributionType,
@@ -67,13 +65,13 @@ object TestMms {
   fun insert(
     db: SQLiteDatabase,
     message: OutgoingMessage,
-    recipientId: RecipientId = message.recipient.id,
+    recipientId: RecipientId = message.threadRecipient.id,
     body: String = message.body,
     type: Long = MessageTypes.BASE_INBOX_TYPE,
     unread: Boolean = false,
     viewed: Boolean = false,
     threadId: Long = 1,
-    receivedTimestampMillis: Long = System.currentTimeMillis(),
+    receivedTimestampMillis: Long = System.currentTimeMillis()
   ): Long {
     val contentValues = ContentValues().apply {
       put(MessageTable.DATE_SENT, message.sentTimeMillis)
@@ -86,7 +84,8 @@ object TestMms {
       put(MessageTable.SMS_SUBSCRIPTION_ID, message.subscriptionId)
       put(MessageTable.EXPIRES_IN, message.expiresIn)
       put(MessageTable.VIEW_ONCE, message.isViewOnce)
-      put(MessageTable.RECIPIENT_ID, recipientId.serialize())
+      put(MessageTable.FROM_RECIPIENT_ID, recipientId.serialize())
+      put(MessageTable.TO_RECIPIENT_ID, recipientId.serialize())
       put(MessageTable.DELIVERY_RECEIPT_COUNT, 0)
       put(MessageTable.RECEIPT_TIMESTAMP, 0)
       put(MessageTable.VIEWED_RECEIPT_COUNT, if (viewed) 1 else 0)

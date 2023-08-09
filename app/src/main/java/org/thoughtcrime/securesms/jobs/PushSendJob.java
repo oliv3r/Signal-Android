@@ -26,15 +26,20 @@ import org.thoughtcrime.securesms.blurhash.BlurHash;
 import org.thoughtcrime.securesms.contactshare.Contact;
 import org.thoughtcrime.securesms.contactshare.ContactModelMapper;
 import org.thoughtcrime.securesms.crypto.ProfileKeyUtil;
+import org.thoughtcrime.securesms.database.NoSuchMessageException;
 import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.database.model.Mention;
+import org.thoughtcrime.securesms.database.model.MessageRecord;
+import org.thoughtcrime.securesms.database.model.MmsMessageRecord;
 import org.thoughtcrime.securesms.database.model.ParentStoryId;
 import org.thoughtcrime.securesms.database.model.StickerRecord;
+import org.thoughtcrime.securesms.database.model.databaseprotos.BodyRangeList;
 import org.thoughtcrime.securesms.database.model.databaseprotos.GiftBadge;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.events.PartProgressEvent;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.JobManager;
+import org.thoughtcrime.securesms.jobmanager.JobTracker;
 import org.thoughtcrime.securesms.jobmanager.impl.BackoffUtil;
 import org.thoughtcrime.securesms.keyvalue.CertificateType;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
@@ -62,9 +67,12 @@ import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentRemo
 import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
 import org.whispersystems.signalservice.api.messages.SignalServicePreview;
 import org.whispersystems.signalservice.api.messages.shared.SharedContact;
+import org.whispersystems.signalservice.api.push.ServiceId.ACI;
+import org.whispersystems.signalservice.api.push.ServiceId;
 import org.whispersystems.signalservice.api.push.exceptions.NonSuccessfulResponseCodeException;
 import org.whispersystems.signalservice.api.push.exceptions.ProofRequiredException;
 import org.whispersystems.signalservice.api.push.exceptions.ServerRejectedException;
+import org.whispersystems.signalservice.internal.push.SignalServiceProtos;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -78,6 +86,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public abstract class PushSendJob extends SendJob {
 
@@ -91,9 +100,18 @@ public abstract class PushSendJob extends SendJob {
 
   @Override
   protected final void onSend() throws Exception {
-    if (SignalStore.account().aciPreKeys().getSignedPreKeyFailureCount() > 5) {
-      PreKeysSyncJob.enqueue(true);
-      throw new TextSecureExpiredException("Too many signed prekey rotation failures");
+    long timeSinceSignedPreKeyRotation = System.currentTimeMillis() - SignalStore.account().aciPreKeys().getLastSignedPreKeyRotationTime();
+
+    if (timeSinceSignedPreKeyRotation > PreKeysSyncJob.MAXIMUM_ALLOWED_SIGNED_PREKEY_AGE || timeSinceSignedPreKeyRotation < 0) {
+      warn(TAG, "It's been too long since rotating our signed prekey (" + timeSinceSignedPreKeyRotation + " ms)! Attempting to rotate now.");
+
+      Optional<JobTracker.JobState> state = ApplicationDependencies.getJobManager().runSynchronously(PreKeysSyncJob.create(), TimeUnit.SECONDS.toMillis(30));
+
+      if (state.isPresent() && state.get() == JobTracker.JobState.SUCCESS) {
+        log(TAG, "Successfully refreshed prekeys. Continuing.");
+      } else {
+        throw new RetryLaterException(new TextSecureExpiredException("Failed to refresh prekeys! State: " + (state.isEmpty() ? "<empty>" : state.get())));
+      }
     }
 
     if (!Recipient.self().isRegistered()) {
@@ -266,6 +284,7 @@ public abstract class PushSendJob extends SendJob {
                                                 width,
                                                 height,
                                                 Optional.ofNullable(attachment.getDigest()),
+                                                Optional.ofNullable(attachment.getIncrementalDigest()),
                                                 Optional.ofNullable(attachment.getFileName()),
                                                 attachment.isVoiceNote(),
                                                 attachment.isBorderless(),
@@ -284,18 +303,37 @@ public abstract class PushSendJob extends SendJob {
     Recipient                recipient          = SignalDatabase.threads().getRecipientForThreadId(threadId);
     ParentStoryId.GroupReply groupReplyStoryId  = SignalDatabase.messages().getParentStoryIdForGroupReply(messageId);
 
+    boolean isStory = false;
+    try {
+      MessageRecord record = SignalDatabase.messages().getMessageRecord(messageId);
+      if (record instanceof MmsMessageRecord) {
+        isStory = (((MmsMessageRecord) record).getStoryType().isStory());
+      }
+    } catch (NoSuchMessageException e) {
+      Log.e(TAG, e);
+    }
+
     if (threadId != -1 && recipient != null) {
-      ApplicationDependencies.getMessageNotifier().notifyMessageDeliveryFailed(context, recipient, ConversationId.fromThreadAndReply(threadId, groupReplyStoryId));
+      if (isStory) {
+        SignalDatabase.messages().markAsNotNotified(messageId);
+        ApplicationDependencies.getMessageNotifier().notifyStoryDeliveryFailed(context, recipient, ConversationId.forConversation(threadId));
+      } else {
+        ApplicationDependencies.getMessageNotifier().notifyMessageDeliveryFailed(context, recipient, ConversationId.fromThreadAndReply(threadId, groupReplyStoryId));
+      }
     }
   }
 
   protected Optional<SignalServiceDataMessage.Quote> getQuoteFor(OutgoingMessage message) throws IOException {
     if (message.getOutgoingQuote() == null) return Optional.empty();
+    if (message.isMessageEdit()) {
+      return Optional.of(new SignalServiceDataMessage.Quote(0, ACI.UNKNOWN, "", null, null, SignalServiceDataMessage.Quote.Type.NORMAL, null));
+    }
 
     long                                                  quoteId              = message.getOutgoingQuote().getId();
     String                                                quoteBody            = message.getOutgoingQuote().getText();
     RecipientId                                           quoteAuthor          = message.getOutgoingQuote().getAuthor();
     List<SignalServiceDataMessage.Mention>                quoteMentions        = getMentionsFor(message.getOutgoingQuote().getMentions());
+    List<SignalServiceProtos.BodyRange>                   bodyRanges           = getBodyRanges(message.getOutgoingQuote().getBodyRanges());
     QuoteModel.Type                                       quoteType            = message.getOutgoingQuote().getType();
     List<SignalServiceDataMessage.Quote.QuotedAttachment> quoteAttachments     = new LinkedList<>();
     Optional<Attachment>                                  localQuoteAttachment = message.getOutgoingQuote()
@@ -328,7 +366,8 @@ public abstract class PushSendJob extends SendJob {
                                                                            .withHeight(thumbnailData.getHeight())
                                                                            .withLength(thumbnailData.getData().length)
                                                                            .withStream(new ByteArrayInputStream(thumbnailData.getData()))
-                                                                           .withResumableUploadSpec(ApplicationDependencies.getSignalServiceMessageSender().getResumableUploadSpec());
+                                                                           .withResumableUploadSpec(ApplicationDependencies.getSignalServiceMessageSender().getResumableUploadSpec())
+                                                                           .withIncremental(attachment.getIncrementalDigest() != null);
 
           thumbnail = builder.build();
         }
@@ -344,9 +383,9 @@ public abstract class PushSendJob extends SendJob {
     Recipient quoteAuthorRecipient = Recipient.resolved(quoteAuthor);
 
     if (quoteAuthorRecipient.isMaybeRegistered()) {
-      return Optional.of(new SignalServiceDataMessage.Quote(quoteId, RecipientUtil.getOrFetchServiceId(context, quoteAuthorRecipient), quoteBody, quoteAttachments, quoteMentions, quoteType.getDataMessageType()));
+      return Optional.of(new SignalServiceDataMessage.Quote(quoteId, RecipientUtil.getOrFetchServiceId(context, quoteAuthorRecipient), quoteBody, quoteAttachments, quoteMentions, quoteType.getDataMessageType(), bodyRanges));
     } else if (quoteAuthorRecipient.hasServiceId()) {
-      return Optional.of(new SignalServiceDataMessage.Quote(quoteId, quoteAuthorRecipient.requireServiceId(), quoteBody, quoteAttachments, quoteMentions, quoteType.getDataMessageType()));
+      return Optional.of(new SignalServiceDataMessage.Quote(quoteId, quoteAuthorRecipient.requireAci(), quoteBody, quoteAttachments, quoteMentions, quoteType.getDataMessageType(), bodyRanges));
     } else {
       return Optional.empty();
     }
@@ -414,7 +453,7 @@ public abstract class PushSendJob extends SendJob {
 
   List<SignalServiceDataMessage.Mention> getMentionsFor(@NonNull List<Mention> mentions) {
     return Stream.of(mentions)
-                 .map(m -> new SignalServiceDataMessage.Mention(Recipient.resolved(m.getRecipientId()).requireServiceId(), m.getStart(), m.getLength()))
+                 .map(m -> new SignalServiceDataMessage.Mention(Recipient.resolved(m.getRecipientId()).requireAci(), m.getStart(), m.getLength()))
                  .toList();
   }
 
@@ -431,6 +470,51 @@ public abstract class PushSendJob extends SendJob {
     } catch (InvalidInputException invalidInputException) {
       throw new UndeliverableMessageException(invalidInputException);
     }
+  }
+
+  protected @Nullable List<SignalServiceProtos.BodyRange> getBodyRanges(@NonNull OutgoingMessage message) {
+    return getBodyRanges(message.getBodyRanges());
+  }
+
+  protected @Nullable List<SignalServiceProtos.BodyRange> getBodyRanges(@Nullable BodyRangeList bodyRanges) {
+    if (bodyRanges == null || bodyRanges.getRangesCount() == 0) {
+      return null;
+    }
+
+    return bodyRanges
+        .getRangesList()
+        .stream()
+        .map(range -> {
+          SignalServiceProtos.BodyRange.Builder builder = SignalServiceProtos.BodyRange.newBuilder()
+                                                                                       .setStart(range.getStart())
+                                                                                       .setLength(range.getLength());
+
+          if (range.hasStyle()) {
+            switch (range.getStyle()) {
+              case BOLD:
+                builder.setStyle(SignalServiceProtos.BodyRange.Style.BOLD);
+                break;
+              case ITALIC:
+                builder.setStyle(SignalServiceProtos.BodyRange.Style.ITALIC);
+                break;
+              case SPOILER:
+                builder.setStyle(SignalServiceProtos.BodyRange.Style.SPOILER);
+                break;
+              case STRIKETHROUGH:
+                builder.setStyle(SignalServiceProtos.BodyRange.Style.STRIKETHROUGH);
+                break;
+              case MONOSPACE:
+                builder.setStyle(SignalServiceProtos.BodyRange.Style.MONOSPACE);
+                break;
+              default:
+                throw new IllegalArgumentException("Unrecognized style");
+            }
+          } else {
+            throw new IllegalArgumentException("Only supports style");
+          }
+
+          return builder.build();
+        }).collect(Collectors.toList());
   }
 
   protected void rotateSenderCertificateIfNecessary() throws IOException {

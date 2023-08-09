@@ -163,6 +163,10 @@ public class WebRtcCallViewModel extends ViewModel {
     return shouldShowSpeakerHint;
   }
 
+  public WebRtcAudioOutput getCurrentAudioOutput() {
+    return getWebRtcControls().getValue().getAudioOutput();
+  }
+
   public LiveData<WebRtcEphemeralState> getEphemeralState() {
     return ephemeralState;
   }
@@ -265,7 +269,8 @@ public class WebRtcCallViewModel extends ViewModel {
                          webRtcViewModel.getActiveDevice(),
                          webRtcViewModel.getAvailableDevices(),
                          webRtcViewModel.getRemoteDevicesCount().orElse(0),
-                         webRtcViewModel.getParticipantLimit());
+                         webRtcViewModel.getParticipantLimit(),
+                         webRtcViewModel.getRecipient().isCallLink());
 
     if (newState.isInOutgoingRingingMode()) {
       cancelTimer();
@@ -339,7 +344,8 @@ public class WebRtcCallViewModel extends ViewModel {
                                     @NonNull SignalAudioManager.AudioDevice activeDevice,
                                     @NonNull Set<SignalAudioManager.AudioDevice> availableDevices,
                                     long remoteDevicesCount,
-                                    @Nullable Long participantLimit)
+                                    @Nullable Long participantLimit,
+                                    boolean isCallLink)
   {
     final WebRtcControls.CallState callState;
 
@@ -407,7 +413,8 @@ public class WebRtcCallViewModel extends ViewModel {
                                                participantLimit,
                                                WebRtcControls.FoldableState.flat(),
                                                activeDevice,
-                                               availableDevices));
+                                               availableDevices,
+                                               isCallLink));
   }
 
   private @NonNull WebRtcControls updateControlsFoldableState(@NonNull WebRtcControls.FoldableState foldableState, @NonNull WebRtcControls controls) {

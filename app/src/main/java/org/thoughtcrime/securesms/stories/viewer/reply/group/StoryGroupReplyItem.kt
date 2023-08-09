@@ -4,7 +4,6 @@ import android.content.Context
 import android.text.Spannable
 import android.text.Spanned
 import android.text.TextPaint
-import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +29,7 @@ import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.recipients.RecipientId
 import org.thoughtcrime.securesms.util.AvatarUtil
 import org.thoughtcrime.securesms.util.DateUtils
+import org.thoughtcrime.securesms.util.LongClickMovementMethod
 import org.thoughtcrime.securesms.util.ViewUtil
 import org.thoughtcrime.securesms.util.adapter.mapping.LayoutFactory
 import org.thoughtcrime.securesms.util.adapter.mapping.MappingAdapter
@@ -203,7 +203,7 @@ object StoryGroupReplyItem {
 
       val actions = mutableListOf<ActionItem>()
       if (model.onCopyClick != null) {
-        actions += ActionItem(R.drawable.ic_copy_24_tinted, context.getString(R.string.StoryGroupReplyItem__copy)) {
+        actions += ActionItem(R.drawable.symbol_copy_android_24, context.getString(R.string.StoryGroupReplyItem__copy)) {
           val toCopy: CharSequence = when (model) {
             is TextModel -> model.text.message.getDisplayBody(context)
             else -> model.messageRecord.getDisplayBody(context)
@@ -211,7 +211,7 @@ object StoryGroupReplyItem {
           model.onCopyClick.invoke(toCopy)
         }
       }
-      actions += ActionItem(R.drawable.ic_trash_24, context.getString(R.string.StoryGroupReplyItem__delete)) { model.onDeleteClick(model.messageRecord) }
+      actions += ActionItem(R.drawable.symbol_trash_24, context.getString(R.string.StoryGroupReplyItem__delete)) { model.onDeleteClick(model.messageRecord) }
 
       SignalContextMenu.Builder(itemView, itemView.rootView as ViewGroup)
         .preferredHorizontalPosition(SignalContextMenu.HorizontalPosition.START)
@@ -225,7 +225,7 @@ object StoryGroupReplyItem {
     override fun bind(model: TextModel) {
       super.bind(model)
 
-      body.movementMethod = LinkMovementMethod.getInstance()
+      body.movementMethod = LongClickMovementMethod.getInstance()
       body.text = model.text.message.getDisplayBody(context).apply {
         linkifyBody(model, this)
       }

@@ -182,7 +182,7 @@ public final class TransferControlView extends FrameLayout {
     return true;
   }
 
-  private int getTransferState(@NonNull List<Slide> slides) {
+  static int getTransferState(@NonNull List<Slide> slides) {
     int     transferState = AttachmentTable.TRANSFER_PROGRESS_DONE;
     boolean allFailed     = true;
 
@@ -201,7 +201,7 @@ public final class TransferControlView extends FrameLayout {
 
   private String getDownloadText(@NonNull List<Slide> slides) {
     if (slides.size() == 1) {
-      return slides.get(0).getContentDescription();
+      return slides.get(0).getContentDescription(getContext());
     } else {
       int downloadCount = Stream.of(slides).reduce(0, (count, slide) -> slide.getTransferState() != AttachmentTable.TRANSFER_PROGRESS_DONE ? count + 1 : count);
       return getContext().getResources().getQuantityString(R.plurals.TransferControlView_n_items, downloadCount, downloadCount);

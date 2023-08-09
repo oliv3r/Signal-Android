@@ -35,7 +35,8 @@ class LocalMetricsDatabase private constructor(
     DATABASE_VERSION,
     0,
     SqlCipherDeletingErrorHandler(DATABASE_NAME),
-    SqlCipherDatabaseHook()
+    SqlCipherDatabaseHook(),
+    true
   ),
   SignalDatabaseOpenHelper {
 
@@ -64,7 +65,7 @@ class LocalMetricsDatabase private constructor(
         $SPLIT_NAME TEXT NOT NULL,
         $DURATION INTEGER NOT NULL
       )
-    """.trimIndent()
+    """
 
     private val CREATE_INDEXES = arrayOf(
       "CREATE INDEX events_create_at_index ON $TABLE_NAME ($CREATED_AT)",
@@ -83,7 +84,6 @@ class LocalMetricsDatabase private constructor(
           if (instance == null) {
             SqlCipherLibraryLoader.load()
             instance = LocalMetricsDatabase(context, DatabaseSecretProvider.getOrCreateDatabaseSecret(context))
-            instance!!.setWriteAheadLoggingEnabled(true)
           }
         }
       }
@@ -99,7 +99,7 @@ class LocalMetricsDatabase private constructor(
         SELECT $EVENT_ID, $EVENT_NAME, SUM($DURATION) AS $DURATION
         FROM $TABLE_NAME
         GROUP BY $EVENT_ID
-    """.trimIndent()
+    """
   }
 
   override fun onCreate(db: SQLiteDatabase) {
@@ -129,13 +129,14 @@ class LocalMetricsDatabase private constructor(
     try {
       event.splits.forEach { split ->
         db.insert(
-          TABLE_NAME, null,
+          TABLE_NAME,
+          null,
           ContentValues().apply {
             put(CREATED_AT, event.createdAt)
             put(EVENT_ID, event.eventId)
             put(EVENT_NAME, event.eventName)
             put(SPLIT_NAME, split.name)
-            put(DURATION, split.duration)
+            put(DURATION, event.timeunit.convert(split.duration, TimeUnit.NANOSECONDS))
           }
         )
       }
@@ -150,6 +151,16 @@ class LocalMetricsDatabase private constructor(
 
   fun clear() {
     writableDatabase.delete(TABLE_NAME, null, null)
+  }
+
+  fun getOldestMetricTime(eventName: String): Long {
+    readableDatabase.rawQuery("SELECT $CREATED_AT FROM $TABLE_NAME WHERE $EVENT_NAME = ? ORDER BY $CREATED_AT ASC", SqlUtil.buildArgs(eventName)).use { cursor ->
+      return if (cursor.moveToFirst()) {
+        cursor.getLong(0)
+      } else {
+        0
+      }
+    }
   }
 
   fun getMetrics(): List<EventMetrics> {
@@ -212,7 +223,7 @@ class LocalMetricsDatabase private constructor(
     }
   }
 
-  private fun eventPercent(eventName: String, percent: Int): Long {
+  fun eventPercent(eventName: String, percent: Int): Long {
     return percentile(EventTotals.VIEW_NAME, "$EVENT_NAME = '$eventName'", percent)
   }
 
@@ -230,7 +241,7 @@ class LocalMetricsDatabase private constructor(
       OFFSET (SELECT COUNT(*)
               FROM $table
               WHERE $where) * $percent / 100 - 1
-    """.trimIndent()
+    """
 
     readableDatabase.rawQuery(query, null).use { cursor ->
       return if (cursor.moveToFirst()) {

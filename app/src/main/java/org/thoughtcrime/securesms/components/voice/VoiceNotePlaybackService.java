@@ -254,7 +254,7 @@ public class VoiceNotePlaybackService extends MediaBrowserServiceCompat {
         if (extras == null) {
           return;
         }
-        long            messageId       = extras.getLong(VoiceNoteMediaItemFactory.EXTRA_MESSAGE_ID);
+        long         messageId       = extras.getLong(VoiceNoteMediaItemFactory.EXTRA_MESSAGE_ID);
         RecipientId  recipientId     = RecipientId.from(extras.getString(VoiceNoteMediaItemFactory.EXTRA_INDIVIDUAL_RECIPIENT_ID));
         MessageTable messageDatabase = SignalDatabase.messages();
 
@@ -277,7 +277,7 @@ public class VoiceNotePlaybackService extends MediaBrowserServiceCompat {
     public void onNotificationPosted(int notificationId, Notification notification, boolean ongoing) {
       if (ongoing && !isForegroundService) {
         try {
-          ForegroundServiceUtil.startWhenCapable(getApplicationContext(), new Intent(getApplicationContext(), VoiceNotePlaybackService.class));
+          ForegroundServiceUtil.start(getApplicationContext(), new Intent(getApplicationContext(), VoiceNotePlaybackService.class));
           startForeground(notificationId, notification);
           isForegroundService = true;
         } catch (UnableToStartException e) {

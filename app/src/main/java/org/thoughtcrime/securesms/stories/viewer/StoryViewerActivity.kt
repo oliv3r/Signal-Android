@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
-import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -16,6 +15,8 @@ import androidx.window.layout.WindowMetricsCalculator
 import com.bumptech.glide.Glide
 import com.bumptech.glide.MemoryCategory
 import org.signal.core.util.dp
+import org.signal.core.util.getParcelableCompat
+import org.signal.core.util.getParcelableExtraCompat
 import org.signal.core.util.sp
 import org.thoughtcrime.securesms.PassphraseRequiredActivity
 import org.thoughtcrime.securesms.R
@@ -46,7 +47,7 @@ class StoryViewerActivity : PassphraseRequiredActivity(), VoiceNoteMediaControll
 
   override fun onCreate(savedInstanceState: Bundle?, ready: Boolean) {
     if (savedInstanceState != null) {
-      val cache: StoryViewStateCache? = savedInstanceState.getParcelable(DATA_CACHE)
+      val cache: StoryViewStateCache? = savedInstanceState.getParcelableCompat(DATA_CACHE, StoryViewStateCache::class.java)
       if (cache != null) {
         storyViewStateViewModel.storyViewStateCache.putAll(cache)
       }
@@ -119,16 +120,14 @@ class StoryViewerActivity : PassphraseRequiredActivity(), VoiceNoteMediaControll
   }
 
   override fun onEnterAnimationComplete() {
-    if (Build.VERSION.SDK_INT >= 21) {
-      window.transitionBackgroundFadeDuration = 100
-    }
+    window.transitionBackgroundFadeDuration = 100
   }
 
   private fun replaceStoryViewerFragment() {
     supportFragmentManager.beginTransaction()
       .replace(
         R.id.fragment_container,
-        StoryViewerFragment.create(intent.getParcelableExtra(ARGS)!!)
+        StoryViewerFragment.create(intent.getParcelableExtraCompat(ARGS, StoryViewerArgs::class.java)!!)
       )
       .commit()
   }

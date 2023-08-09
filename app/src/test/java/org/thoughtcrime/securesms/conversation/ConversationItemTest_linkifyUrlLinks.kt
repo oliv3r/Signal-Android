@@ -8,6 +8,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.thoughtcrime.securesms.conversation.v2.items.V2ConversationBodyUtil
 import org.thoughtcrime.securesms.util.UrlClickHandler
 
 @Suppress("ClassName")
@@ -19,11 +20,11 @@ class ConversationItemTest_linkifyUrlLinks(private val input: String, private va
   fun test1() {
     val spannableStringBuilder = SpannableStringBuilder(input)
 
-    ConversationItem.linkifyUrlLinks(spannableStringBuilder, true, UrlHandler)
+    V2ConversationBodyUtil.linkifyUrlLinks(spannableStringBuilder, true, UrlHandler)
 
     val spans = spannableStringBuilder.getSpans(0, expectedUrl.length, URLSpan::class.java)
-    assertEquals(2, spans.size)
-    assertEquals(expectedUrl, spans.get(0).url)
+    assertEquals(1, spans.size)
+    assertEquals(expectedUrl, spans[0].url)
   }
 
   private object UrlHandler : UrlClickHandler {
@@ -40,7 +41,7 @@ class ConversationItemTest_linkifyUrlLinks(private val input: String, private va
       arrayOf("https://www.instagram.com/tv/CfImYdngccQ/?igshid=YmMyMTA2M2Y=\n", "https://www.instagram.com/tv/CfImYdngccQ/?igshid=YmMyMTA2M2Y="),
 //      arrayOf("https://fr.ulule.com/sapins-barbus-la-bd-/ ", "https://fr.ulule.com/sapins-barbus-la-bd-/"),
       arrayOf("https://fr.ulule.com/sapins-barbus-la-bd-/\n", "https://fr.ulule.com/sapins-barbus-la-bd-/"),
-      arrayOf("https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)", "https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)"),
+      arrayOf("https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)", "https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)")
 //      arrayOf("https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)\n\n\uD83E\uDD14\uD83D\uDE1C", "https://de.m.wikipedia.org/wiki/Red_Dawn_(2012)")
     )
   }

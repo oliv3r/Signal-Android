@@ -3,7 +3,6 @@ package org.thoughtcrime.securesms.stories.viewer.first
 import android.app.Dialog
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -11,12 +10,12 @@ import androidx.core.app.ActivityCompat
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.viewModels
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import org.signal.core.util.concurrent.LifecycleDisposable
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.stories.StoryFirstTimeNavigationView
 import org.thoughtcrime.securesms.stories.viewer.StoryViewerState
 import org.thoughtcrime.securesms.stories.viewer.StoryViewerViewModel
-import org.thoughtcrime.securesms.util.LifecycleDisposable
 
 class StoryFirstTimeNavigationFragment : DialogFragment(R.layout.story_viewer_first_time_navigation_stub), StoryFirstTimeNavigationView.Callback {
 
@@ -36,14 +35,12 @@ class StoryFirstTimeNavigationFragment : DialogFragment(R.layout.story_viewer_fi
     val dialog = super.onCreateDialog(savedInstanceState)
     dialog.window!!.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
-    if (Build.VERSION.SDK_INT >= 21) {
-      dialog.window!!.addFlags(
-        WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION or
-          WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or
-          WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or
-          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-      )
-    }
+    dialog.window!!.addFlags(
+      WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION or
+        WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or
+        WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+    )
     return dialog
   }
 

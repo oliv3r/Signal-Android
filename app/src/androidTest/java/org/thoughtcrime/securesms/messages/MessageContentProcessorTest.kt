@@ -30,7 +30,7 @@ abstract class MessageContentProcessorTest {
   protected fun createNormalContentTestSubject(): MessageContentProcessor {
     val context = ApplicationProvider.getApplicationContext<Application>()
 
-    return MessageContentProcessor.forNormalContent(context)
+    return MessageContentProcessor.create(context)
   }
 
   /**
@@ -46,9 +46,9 @@ abstract class MessageContentProcessorTest {
   ): SignalServiceContentProto {
     return TestProtos.build {
       serviceContent(
-        localAddress = address(uuid = harness.self.requireServiceId().uuid()).build(),
+        localAddress = address(uuid = harness.self.requireServiceId().rawUuid).build(),
         metadata = metadata(
-          address = address(uuid = messageSender.requireServiceId().uuid()).build()
+          address = address(uuid = messageSender.requireServiceId().rawUuid).build()
         ).build()
       ).apply {
         content = content().apply {

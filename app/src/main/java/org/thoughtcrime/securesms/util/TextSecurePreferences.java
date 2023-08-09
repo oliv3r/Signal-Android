@@ -20,11 +20,10 @@ import org.signal.core.util.PendingIntentFlags;
 import org.signal.core.util.logging.Log;
 import org.signal.libsignal.zkgroup.profiles.ProfileKey;
 import org.thoughtcrime.securesms.R;
-import org.thoughtcrime.securesms.backup.BackupProtos;
+import org.thoughtcrime.securesms.backup.proto.SharedPreference;
 import org.thoughtcrime.securesms.crypto.ProfileKeyUtil;
 import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.events.ReminderUpdateEvent;
 import org.thoughtcrime.securesms.jobmanager.impl.SqlCipherMigrationConstraintObserver;
 import org.thoughtcrime.securesms.keyvalue.SettingsValues;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
@@ -106,8 +105,6 @@ public class TextSecurePreferences {
   public  static final String MEDIA_DOWNLOAD_MOBILE_PREF       = "pref_media_download_mobile";
   public  static final String MEDIA_DOWNLOAD_WIFI_PREF         = "pref_media_download_wifi";
   public  static final String MEDIA_DOWNLOAD_ROAMING_PREF      = "pref_media_download_roaming";
-
-  public  static final String CALL_BANDWIDTH_PREF              = "pref_data_call_bandwidth";
 
   public  static final String SYSTEM_EMOJI_PREF                = "pref_system_emoji";
   private static final String MULTI_DEVICE_PROVISIONED_PREF    = "pref_multi_device";
@@ -253,39 +250,39 @@ public class TextSecurePreferences {
     return count;
   }
 
-  public static List<BackupProtos.SharedPreference> getPreferencesToSaveToBackup(@NonNull Context context) {
-    SharedPreferences                   preferences  = getSharedPreferences(context);
-    List<BackupProtos.SharedPreference> backupProtos = new ArrayList<>();
-    String                              defaultFile  = context.getPackageName() + "_preferences";
+  public static List<SharedPreference> getPreferencesToSaveToBackup(@NonNull Context context) {
+    SharedPreferences      preferences  = getSharedPreferences(context);
+    List<SharedPreference> backupProtos = new ArrayList<>();
+    String                 defaultFile  = context.getPackageName() + "_preferences";
 
     for (String booleanPreference : booleanPreferencesToBackup) {
       if (preferences.contains(booleanPreference)) {
-        backupProtos.add(BackupProtos.SharedPreference.newBuilder()
-                                                      .setFile(defaultFile)
-                                                      .setKey(booleanPreference)
-                                                      .setBooleanValue(preferences.getBoolean(booleanPreference, false))
-                                                      .build());
+        backupProtos.add(new SharedPreference.Builder()
+                                             .file_(defaultFile)
+                                             .key(booleanPreference)
+                                             .booleanValue(preferences.getBoolean(booleanPreference, false))
+                                             .build());
       }
     }
 
     for (String stringPreference : stringPreferencesToBackup) {
       if (preferences.contains(stringPreference)) {
-        backupProtos.add(BackupProtos.SharedPreference.newBuilder()
-                                                      .setFile(defaultFile)
-                                                      .setKey(stringPreference)
-                                                      .setValue(preferences.getString(stringPreference, null))
-                                                      .build());
+        backupProtos.add(new SharedPreference.Builder()
+                                             .file_(defaultFile)
+                                             .key(stringPreference)
+                                             .value_(preferences.getString(stringPreference, null))
+                                             .build());
       }
     }
 
     for (String stringSetPreference : stringSetPreferencesToBackup) {
       if (preferences.contains(stringSetPreference)) {
-        backupProtos.add(BackupProtos.SharedPreference.newBuilder()
-                                                      .setFile(defaultFile)
-                                                      .setKey(stringSetPreference)
-                                                      .setIsStringSetValue(true)
-                                                      .addAllStringSetValue(preferences.getStringSet(stringSetPreference, Collections.emptySet()))
-                                                      .build());
+        backupProtos.add(new SharedPreference.Builder()
+                                             .file_(defaultFile)
+                                             .key(stringSetPreference)
+                                             .isStringSetValue(true)
+                                             .stringSetValue(new ArrayList<>(preferences.getStringSet(stringSetPreference, Collections.emptySet())))
+                                             .build());
       }
     }
 
@@ -335,14 +332,6 @@ public class TextSecurePreferences {
   public static @Nullable String getDeprecatedV1RegistrationLockPin(@NonNull Context context) {
     //noinspection deprecation
     return getStringPreference(context, REGISTRATION_LOCK_PIN_PREF_V1, null);
-  }
-
-  public static void clearRegistrationLockV1(@NonNull Context context) {
-    //noinspection deprecation
-    getSharedPreferences(context)
-                     .edit()
-                     .remove(REGISTRATION_LOCK_PIN_PREF_V1)
-                     .apply();
   }
 
   /**
@@ -461,8 +450,6 @@ public class TextSecurePreferences {
 
     if (value) {
       clearLocalCredentials(context);
-    } else {
-      NotificationManagerCompat.from(context).cancel(NotificationIds.UNREGISTERED_NOTIFICATION_ID);
     }
   }
 
@@ -510,6 +497,7 @@ public class TextSecurePreferences {
   /**
    * @deprecated Use {@link SettingsValues#getMessageFontSize()} via {@link org.thoughtcrime.securesms.keyvalue.SignalStore} instead.
    */
+  @Deprecated
   public static int getMessageBodyTextSize(Context context) {
     return Integer.parseInt(getStringPreference(context, MESSAGE_BODY_TEXT_SIZE_PREF, "16"));
   }
@@ -786,6 +774,7 @@ public class TextSecurePreferences {
   /**
    * @deprecated Use {@link SettingsValues#getTheme()} via {@link org.thoughtcrime.securesms.keyvalue.SignalStore} instead.
    */
+  @Deprecated
   public static String getTheme(Context context) {
     return getStringPreference(context, THEME_PREF, DynamicTheme.systemThemeAvailable() ? "system" : "light");
   }
@@ -809,6 +798,7 @@ public class TextSecurePreferences {
   /**
    * @deprecated Use {@link SettingsValues#getLanguage()} via {@link org.thoughtcrime.securesms.keyvalue.SignalStore} instead.
    */
+  @Deprecated
   public static String getLanguage(Context context) {
     return getStringPreference(context, LANGUAGE_PREF, "zz");
   }
@@ -816,6 +806,7 @@ public class TextSecurePreferences {
   /**
    * @deprecated Use {@link SettingsValues#setLanguage(String)} via {@link org.thoughtcrime.securesms.keyvalue.SignalStore} instead.
    */
+  @Deprecated
   public static void setLanguage(Context context, String language) {
     setStringPreference(context, LANGUAGE_PREF, language);
   }

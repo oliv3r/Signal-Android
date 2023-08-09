@@ -47,8 +47,8 @@ import org.thoughtcrime.securesms.util.FileUtils
 import org.thoughtcrime.securesms.util.ServiceUtil
 import org.thoughtcrime.securesms.util.Triple
 import org.thoughtcrime.securesms.util.Util
-import org.whispersystems.signalservice.api.push.ACI
 import org.whispersystems.signalservice.api.push.DistributionId
+import org.whispersystems.signalservice.api.push.ServiceId.ACI
 import java.io.File
 import java.util.LinkedList
 import java.util.Locale
@@ -2441,7 +2441,8 @@ object V149_LegacyMigrations : SignalDatabaseMigration {
       )
 
       val recipientId = db.insert(
-        "recipient", null,
+        "recipient",
+        null,
         contentValuesOf(
           "distribution_list_id" to 1L,
           "storage_service_key" to Base64.encodeBytes(StorageSyncHelper.generateKey()),
@@ -2451,7 +2452,8 @@ object V149_LegacyMigrations : SignalDatabaseMigration {
 
       val listUUID = UUID.randomUUID().toString()
       db.insert(
-        "distribution_list", null,
+        "distribution_list",
+        null,
         contentValuesOf(
           "_id" to 1L,
           "name" to listUUID,
